@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && !request.auth.token.firebase.sign_in_provider.matches('anonymous');
+    }
+
+    // Config collection - read only for all, write for admin
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Inventory collection - read for all, write for admin only
+    match /inventory/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Vending machines collection - read for all, write for admin
+    match /vendingMachines/{machineId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Sessions collection - read by session ID, write with restrictions
+    match /sessions/{sessionId} {
+      // Anyone can read a specific session
+      allow read: if true;
+
+      // Only functions can create sessions
+      allow create: if false;
+
+      // Users can update basket and some fields
+      allow update: if isAuthenticated() &&
+        onlyUpdatingFields(['basket', 'totalAmount']) &&
+        validBasketUpdate();
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+
+      function onlyUpdatingFields(allowedFields) {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(allowedFields);
+      }
+
+      function validBasketUpdate() {
+        // Ensure basket is an array and totalAmount is calculated correctly
+        return request.resource.data.basket is list &&
+               request.resource.data.totalAmount is number &&
+               request.resource.data.totalAmount >= 0;
+      }
+    }
+
+    // Events collection - write by functions/machines, read by machines
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      // Only functions should create events
+      allow create: if false;
+      // Vending machines can update to mark as processed
+      allow update: if isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['processed']);
+      allow delete: if isAdmin();
+    }
+  }
+}
