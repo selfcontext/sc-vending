@@ -9,6 +9,8 @@ import DispensingPage from '@/pages/DispensingPage';
 import SuccessPage from '@/pages/SuccessPage';
 import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AnalyticsPage from '@/pages/admin/AnalyticsPage';
+import MachineStatusPage from '@/pages/admin/MachineStatusPage';
 
 function App() {
   const { loading } = useAuth();
@@ -36,6 +38,8 @@ function App() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/analytics" element={<AnalyticsPage />} />
+        <Route path="/admin/machines" element={<MachineStatusPage />} />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/admin/login" replace />} />

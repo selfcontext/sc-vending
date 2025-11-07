@@ -329,3 +329,199 @@ export const updateHeartbeat = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to update heartbeat');
   }
 });
+
+/**
+ * Extend session expiry time
+ * Can only be extended once per session
+ */
+export const extendSession = functions.https.onCall(async (data, context) => {
+  const { sessionId } = data;
+
+  if (!sessionId) {
+    throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
+  }
+
+  try {
+    const sessionRef = db.collection('sessions').doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+
+    if (!sessionDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Session not found');
+    }
+
+    const session = sessionDoc.data()!;
+
+    // Check if already extended
+    if (session.extendedCount && session.extendedCount >= 1) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Session has already been extended'
+      );
+    }
+
+    // Check if session is still active
+    if (session.status !== 'active') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Session is not active'
+      );
+    }
+
+    // Get config for session timeout
+    const configDoc = await db.collection('config').doc('app').get();
+    const config = configDoc.data() || {};
+    const sessionTimeoutMinutes = config.sessionTimeoutMinutes || 3;
+
+    const now = admin.firestore.Timestamp.now();
+    const newExpiresAt = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + sessionTimeoutMinutes * 60 * 1000
+    );
+
+    await sessionRef.update({
+      expiresAt: newExpiresAt,
+      extendedCount: (session.extendedCount || 0) + 1,
+    });
+
+    // Log the extension
+    await db.collection('transactionLogs').add({
+      type: 'session_extended',
+      sessionId,
+      vendingMachineId: session.vendingMachineId,
+      details: {
+        oldExpiresAt: session.expiresAt,
+        newExpiresAt,
+        extendedCount: (session.extendedCount || 0) + 1,
+      },
+      timestamp: now,
+    });
+
+    return {
+      success: true,
+      newExpiresAt: newExpiresAt.toMillis(),
+    };
+  } catch (error) {
+    console.error('Error extending session:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    throw new functions.https.HttpsError('internal', 'Failed to extend session');
+  }
+});
+
+/**
+ * Monitor inventory changes and send low stock notifications
+ * Triggered when inventory quantity is updated
+ */
+export const monitorLowStock = functions.firestore
+  .document('inventory/{productId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+
+    // Check if quantity decreased and is now at or below threshold
+    if (after.quantity <= 3 && before.quantity > after.quantity) {
+      const productId = context.params.productId;
+
+      // TODO: Implement your notification logic here
+      // Options:
+      // 1. Send email via SendGrid/Mailgun
+      // 2. Send SMS via Twilio
+      // 3. Push notification via FCM
+      // 4. Slack/Discord webhook
+      // 5. Create an alert in admin dashboard
+
+      console.log(`LOW STOCK ALERT: Product ${after.name} (${productId}) has ${after.quantity} items left`);
+
+      // Create a low stock event
+      await db.collection('events').add({
+        type: 'StockLow',
+        sessionId: '',
+        vendingMachineId: after.vendingMachineId,
+        payload: {
+          productId,
+          productName: after.name,
+          quantity: after.quantity,
+          threshold: 3,
+        },
+        timestamp: admin.firestore.Timestamp.now(),
+        processed: false,
+      });
+
+      // PLACEHOLDER: Add your notification implementation here
+      // Example with email:
+      // const nodemailer = require('nodemailer');
+      // await sendLowStockEmail(after.name, after.quantity);
+
+      // Example with Twilio SMS:
+      // const twilio = require('twilio');
+      // await sendLowStockSMS(after.name, after.quantity);
+    }
+
+    return null;
+  });
+
+/**
+ * Manual dispense test function
+ * For admin testing only
+ */
+export const manualDispenseTest = functions.https.onCall(async (data, context) => {
+  // Check if user is admin (not anonymous)
+  if (!context.auth || context.auth.token.firebase.sign_in_provider === 'anonymous') {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Only admins can perform manual dispense tests'
+    );
+  }
+
+  const { vendingMachineId, productId, slot } = data;
+
+  if (!vendingMachineId || !productId || slot === undefined) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'vendingMachineId, productId, and slot are required'
+    );
+  }
+
+  try {
+    const now = admin.firestore.Timestamp.now();
+
+    // Create a test ProductDispatch event
+    const eventRef = await db.collection('events').add({
+      type: 'ProductDispatch',
+      sessionId: 'manual_test',
+      vendingMachineId,
+      payload: {
+        productId,
+        productName: 'Test Product',
+        slot,
+        price: 0,
+        isTest: true,
+      },
+      timestamp: now,
+      processed: false,
+    });
+
+    // Log the test
+    await db.collection('transactionLogs').add({
+      type: 'product_dispensed',
+      userId: context.auth.uid,
+      vendingMachineId,
+      details: {
+        productId,
+        slot,
+        isTest: true,
+        eventId: eventRef.id,
+      },
+      timestamp: now,
+    });
+
+    return {
+      success: true,
+      eventId: eventRef.id,
+      message: 'Test dispense event created. Check vending machine for dispensing.',
+    };
+  } catch (error) {
+    console.error('Error creating manual dispense test:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to create test dispense');
+  }
+});

@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Package, X, Plus, Minus, ArrowRight } from 'lucide-react';
 import { collection, doc, onSnapshot, updateDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { Product, Session, BasketItem } from '@/types';
+import SessionTimer from '@/components/SessionTimer';
 import toast from 'react-hot-toast';
 import Lottie from 'lottie-react';
 import shoppingAnimation from '@/assets/animations/shopping.json';
@@ -146,6 +148,25 @@ export default function ShoppingPage() {
     }
   };
 
+  const handleExtendSession = async () => {
+    if (!sessionId) return;
+
+    try {
+      const functions = getFunctions();
+      const extendSession = httpsCallable(functions, 'extendSession');
+      const result = await extendSession({ sessionId });
+
+      toast.success('Session extended successfully!');
+    } catch (error: any) {
+      console.error('Failed to extend session:', error);
+      if (error.code === 'failed-precondition') {
+        toast.error(error.message || 'Session cannot be extended');
+      } else {
+        toast.error('Failed to extend session');
+      }
+    }
+  };
+
   const cartItemCount = session?.basket.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
   if (loading) {
@@ -160,6 +181,16 @@ export default function ShoppingPage() {
 
   return (
     <div className="min-h-screen pb-24">
+      {/* Session Timer */}
+      {session && session.status === 'active' && (
+        <SessionTimer
+          expiresAt={session.expiresAt}
+          sessionId={sessionId!}
+          extendedCount={session.extendedCount || 0}
+          onExtend={handleExtendSession}
+        />
+      )}
+
       {/* Header */}
       <div className="glass-strong sticky top-0 z-40 p-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

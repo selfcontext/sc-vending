@@ -9,12 +9,6 @@ export interface Product {
   vendingMachineId: string;
   category: string;
   isActive: boolean;
-  nutritionInfo?: {
-    calories?: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-  };
   allergens?: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +51,7 @@ export interface Session {
   expiresAt: Date;
   completedAt?: Date;
   qrCodeData: string;
+  extendedCount?: number; // Track how many times session has been extended
 }
 
 export type EventType =
@@ -97,4 +92,14 @@ export interface AppConfig {
   maxRetries: number;
   enableAnalytics: boolean;
   maintenanceMode: boolean;
+}
+
+export interface TransactionLog {
+  id: string;
+  type: 'session_created' | 'basket_updated' | 'payment_completed' | 'product_dispensed' | 'inventory_updated' | 'session_extended';
+  userId?: string;
+  sessionId?: string;
+  vendingMachineId?: string;
+  details: any;
+  timestamp: Date;
 }
