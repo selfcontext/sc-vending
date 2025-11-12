@@ -82,7 +82,31 @@ This will start:
 
 ### Load Seed Data
 
-You can manually add the seed data from `seed-data.json` through the Emulator UI at http://localhost:4000
+#### Automated Seeding (Recommended)
+
+Load sample data into Firestore automatically:
+
+```bash
+# Set up service account (one-time setup)
+# 1. Go to Firebase Console → Project Settings → Service Accounts
+# 2. Generate new private key and save as service-account-key.json
+# 3. Never commit this file to git
+
+export GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
+
+# Run the seed script
+cd functions
+npm run seed
+```
+
+This will populate:
+- Configuration settings (session timeout, retries, etc.)
+- Vending machine data
+- Sample inventory products (6 items)
+
+#### Manual Seeding
+
+You can also manually add the seed data from `seed-data.json` through the Emulator UI at http://localhost:4000
 
 ## Deployment
 
@@ -109,12 +133,15 @@ firebase deploy --only storage
 
 ### Available Functions
 
-1. **createSession** - Creates a new vending session with QR code
-2. **processPayment** - Processes payment and creates dispense events
-3. **confirmDispense** - Confirms product dispensing and updates inventory
-4. **expireSessions** - Scheduled function to expire old sessions (runs every 5 min)
-5. **cleanupOldEvents** - Scheduled function to clean up old events (runs daily)
-6. **updateHeartbeat** - Updates vending machine status
+1. **createSession** - Creates a new vending session with QR code (rate limited: 10/min per machine)
+2. **addToBasket** - Adds products to session basket
+3. **checkout** - Processes payment and creates dispense events
+4. **extendSession** - Extends session expiry by timeout duration (once per session, rate limited: 2/5min)
+5. **monitorLowStock** - Firestore trigger that alerts when product quantity ≤ 3
+6. **manualDispenseTest** - Admin-only function to test product dispensing
+7. **expireSessions** - Scheduled function to expire old sessions (runs every 5 min)
+8. **cleanupOldEvents** - Scheduled function to clean up old events (runs daily)
+9. **updateHeartbeat** - Updates vending machine status
 
 ### Testing Functions Locally
 
