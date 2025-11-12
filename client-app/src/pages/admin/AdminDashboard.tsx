@@ -13,6 +13,9 @@ import {
   Loader,
   X,
   Save,
+  Upload,
+  Image as ImageIcon,
+  Link as LinkIcon,
 } from 'lucide-react';
 import {
   collection,
@@ -31,6 +34,8 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { Product, Session } from '@/types';
 import toast from 'react-hot-toast';
+import { uploadImage, deleteImage, UploadProgress } from '@/lib/image-upload';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -83,11 +88,6 @@ export default function AdminDashboard() {
     };
   }, [isAdmin, navigate]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/admin/login');
-  };
-
   const stats = {
     totalProducts: products.length,
     activeProducts: products.filter((p) => p.isActive).length,
@@ -100,31 +100,17 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader className="w-12 h-12 animate-spin text-white" />
-      </div>
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader className="w-12 h-12 animate-spin text-primary-600" />
+        </div>
+      </AdminLayout>
     );
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="glass-strong rounded-3xl p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-              <p className="text-gray-600">Manage your vending machines</p>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              Sign Out
-            </button>
-          </div>
-        </div>
+    <AdminLayout>
+      <div className="p-8">
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -216,9 +202,8 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Product Form Modal */}
+        {/* Product Form Modal */}
       <AnimatePresence>
         {(isAddingProduct || editingProduct) && (
           <ProductFormModal
@@ -252,7 +237,8 @@ export default function AdminDashboard() {
           />
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 
@@ -430,9 +416,76 @@ function ProductFormModal({
     isActive: product?.isActive ?? true,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [imageMode, setImageMode] = useState<'url' | 'upload'>('url');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>(product?.imageUrl || '');
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUrlChange = (url: string) => {
+    setFormData({ ...formData, imageUrl: url });
+    setImagePreview(url);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+
+    try {
+      let finalImageUrl = formData.imageUrl;
+
+      // Upload image if file is selected
+      if (selectedFile && imageMode === 'upload') {
+        setIsUploading(true);
+        toast.loading('Uploading image...', { id: 'upload' });
+
+        finalImageUrl = await uploadImage(selectedFile, 'products', setUploadProgress);
+
+        // Delete old image if updating product
+        if (product?.imageUrl && product.imageUrl !== finalImageUrl) {
+          await deleteImage(product.imageUrl);
+        }
+
+        toast.success('Image uploaded successfully', { id: 'upload' });
+      }
+
+      // Save product with final image URL
+      await onSave({
+        ...formData,
+        imageUrl: finalImageUrl,
+      });
+
+      setIsUploading(false);
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      toast.error(error.message || 'Failed to save product');
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -497,15 +550,101 @@ function ProductFormModal({
               />
             </div>
 
+            {/* Image Upload/URL Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Image URL</label>
-              <input
-                type="url"
-                value={formData.imageUrl}
-                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
-                placeholder="https://example.com/image.jpg"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-3">Product Image</label>
+
+              {/* Mode Toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setImageMode('url')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    imageMode === 'url'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageMode('upload')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    imageMode === 'upload'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload
+                </button>
+              </div>
+
+              {/* URL Input */}
+              {imageMode === 'url' && (
+                <input
+                  type="url"
+                  value={formData.imageUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
+                  placeholder="https://example.com/image.jpg"
+                />
+              )}
+
+              {/* File Upload */}
+              {imageMode === 'upload' && (
+                <div>
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col items-center justify-center py-4">
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">
+                        {selectedFile ? selectedFile.name : 'Click to upload image'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {uploadProgress && uploadProgress.status === 'uploading' && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                        <span>Uploading...</span>
+                        <span>{Math.round(uploadProgress.progress)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Image Preview */}
+              {imagePreview && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 mb-2">Preview:</p>
+                  <div className="w-full h-48 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-full max-h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://via.placeholder.com/200?text=Invalid+Image';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -564,16 +703,27 @@ function ProductFormModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium transition-colors"
+                disabled={isUploading}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+                disabled={isUploading}
+                className="flex-1 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-5 h-5" />
-                Save Product
+                {isUploading ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save Product
+                  </>
+                )}
               </button>
             </div>
           </form>
