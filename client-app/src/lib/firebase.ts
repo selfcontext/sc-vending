@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { validateEnvironment } from './env-validation';
+
+// Validate environment variables before initializing
+validateEnvironment();
 
 // Firebase configuration - replace with your actual config
 const firebaseConfig = {

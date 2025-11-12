@@ -5,6 +5,45 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
+ * Simple in-memory rate limiter using Firestore
+ * For production, consider using Redis or Firebase Extensions Rate Limiter
+ */
+const rateLimits = new Map<string, { count: number; resetAt: number }>();
+
+async function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowSeconds: number
+): Promise<void> {
+  const now = Date.now();
+  const limit = rateLimits.get(key);
+
+  if (limit && now < limit.resetAt) {
+    if (limit.count >= maxRequests) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many requests. Please try again later.'
+      );
+    }
+    limit.count++;
+  } else {
+    rateLimits.set(key, {
+      count: 1,
+      resetAt: now + windowSeconds * 1000,
+    });
+  }
+
+  // Cleanup old entries periodically
+  if (Math.random() < 0.01) {
+    for (const [k, v] of rateLimits.entries()) {
+      if (now >= v.resetAt) {
+        rateLimits.delete(k);
+      }
+    }
+  }
+}
+
+/**
  * Create a new session for a vending machine
  * Called when vending machine starts or QR code needs refresh
  */
@@ -14,6 +53,9 @@ export const createSession = functions.https.onCall(async (data, context) => {
   if (!vendingMachineId) {
     throw new functions.https.HttpsError('invalid-argument', 'vendingMachineId is required');
   }
+
+  // Rate limit: 10 sessions per machine per minute
+  await checkRateLimit(`session_${vendingMachineId}`, 10, 60);
 
   try {
     // Get config for session timeout
@@ -340,6 +382,9 @@ export const extendSession = functions.https.onCall(async (data, context) => {
   if (!sessionId) {
     throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
   }
+
+  // Rate limit: 2 extensions per session (extra safety, though limited to 1 in logic)
+  await checkRateLimit(`extend_${sessionId}`, 2, 300);
 
   try {
     const sessionRef = db.collection('sessions').doc(sessionId);

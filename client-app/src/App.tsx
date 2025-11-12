@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Pages
 import ShoppingPage from '@/pages/ShoppingPage';
@@ -27,25 +28,27 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Customer Routes */}
-        <Route path="/session/:sessionId" element={<ShoppingPage />} />
-        <Route path="/checkout/:sessionId" element={<CheckoutPage />} />
-        <Route path="/dispensing/:sessionId" element={<DispensingPage />} />
-        <Route path="/success/:sessionId" element={<SuccessPage />} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          {/* Customer Routes */}
+          <Route path="/session/:sessionId" element={<ShoppingPage />} />
+          <Route path="/checkout/:sessionId" element={<CheckoutPage />} />
+          <Route path="/dispensing/:sessionId" element={<DispensingPage />} />
+          <Route path="/success/:sessionId" element={<SuccessPage />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/analytics" element={<AnalyticsPage />} />
-        <Route path="/admin/machines" element={<MachineStatusPage />} />
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/analytics" element={<AnalyticsPage />} />
+          <Route path="/admin/machines" element={<MachineStatusPage />} />
 
-        {/* Default redirect */}
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
-        <Route path="*" element={<Navigate to="/admin/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/admin/login" replace />} />
+          <Route path="*" element={<Navigate to="/admin/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

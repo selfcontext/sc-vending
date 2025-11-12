@@ -12,6 +12,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { VendingMachine } from '@/types';
+import AdminLayout from '@/components/AdminLayout';
 import toast from 'react-hot-toast';
 
 export default function MachineStatusPage() {
@@ -122,10 +123,8 @@ export default function MachineStatusPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Machine Status</h1>
-
+    <AdminLayout>
+      <div className="p-8">
         {/* Machines Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {machines.map((machine) => {
@@ -250,6 +249,6 @@ export default function MachineStatusPage() {
           )}
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }

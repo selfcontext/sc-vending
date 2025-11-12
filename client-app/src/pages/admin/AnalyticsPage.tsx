@@ -33,6 +33,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Session, TransactionLog } from '@/types';
+import AdminLayout from '@/components/AdminLayout';
 
 const COLORS = ['#9333ea', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
@@ -188,13 +189,10 @@ export default function AnalyticsPage() {
   const hourlyData = getHourlyDistribution();
 
   return (
-    <div className="p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
-
-          {/* Time Range Selector */}
+    <AdminLayout>
+      <div className="p-8">
+        {/* Time Range Selector */}
+        <div className="flex justify-end mb-8">
           <div className="flex gap-2">
             {(['today', 'week', 'month'] as const).map((range) => (
               <button
