@@ -37,6 +37,7 @@ import toast from 'react-hot-toast';
 import { uploadImage, deleteImage, UploadProgress } from '@/lib/image-upload';
 import AdminLayout from '@/components/AdminLayout';
 import ConfirmModal from '@/components/ConfirmModal';
+import { staggerContainer, staggerItem, fadeInUp, scaleIn } from '@/lib/animations';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -305,13 +306,18 @@ function ProductList({
   onDelete: (productId: string) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <motion.div
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className="space-y-4"
+    >
       {products.map((product) => (
         <motion.div
           key={product.id}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-4 p-4 rounded-2xl bg-white/50 hover:bg-white/80 transition-colors"
+          variants={staggerItem}
+          whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+          className="flex items-center gap-4 p-4 rounded-2xl bg-white/50 hover:bg-white/80 transition-colors shadow-sm hover:shadow-md"
         >
           <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center flex-shrink-0">
             {product.imageUrl ? (
@@ -363,7 +369,7 @@ function ProductList({
           </div>
         </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
 
@@ -371,8 +377,9 @@ function SessionList({ sessions }: { sessions: Session[] }) {
   if (sessions.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        variants={fadeInUp}
+        initial="initial"
+        animate="animate"
         className="text-center py-12 px-4"
       >
         <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -385,13 +392,18 @@ function SessionList({ sessions }: { sessions: Session[] }) {
   }
 
   return (
-    <div className="space-y-4">
+    <motion.div
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className="space-y-4"
+    >
       {sessions.map((session) => (
         <motion.div
           key={session.id}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-2xl bg-white/50"
+          variants={staggerItem}
+          whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+          className="p-4 rounded-2xl bg-white/50 hover:bg-white/70 transition-colors shadow-sm hover:shadow-md"
         >
           <div className="flex items-start justify-between mb-3">
             <div>
@@ -434,7 +446,7 @@ function SessionList({ sessions }: { sessions: Session[] }) {
           </div>
         </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
 

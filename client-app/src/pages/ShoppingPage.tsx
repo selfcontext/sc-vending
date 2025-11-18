@@ -7,9 +7,11 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { Product, Session, BasketItem } from '@/types';
 import SessionTimer from '@/components/SessionTimer';
+import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import toast from 'react-hot-toast';
 import Lottie from 'lottie-react';
 import shoppingAnimation from '@/assets/animations/shopping.json';
+import { staggerContainer, staggerItem, fadeInUp, slideInRight, scaleIn, pageTransition } from '@/lib/animations';
 
 export default function ShoppingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -171,16 +173,35 @@ export default function ShoppingPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-64 h-64">
-          <Lottie animationData={shoppingAnimation} loop />
+      <motion.div
+        variants={pageTransition}
+        initial="initial"
+        animate="animate"
+        className="min-h-screen pb-24"
+      >
+        <div className="glass-strong sticky top-0 z-40 p-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Second Space</h1>
+              <p className="text-sm text-gray-600">Loading...</p>
+            </div>
+          </div>
         </div>
-      </div>
+        <div className="max-w-7xl mx-auto p-4 mt-6">
+          <ProductGridSkeleton />
+        </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24">
+    <motion.div
+      variants={pageTransition}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      className="min-h-screen pb-24"
+    >
       {/* Session Timer */}
       {session && session.status === 'active' && (
         <SessionTimer
@@ -198,17 +219,27 @@ export default function ShoppingPage() {
             <h1 className="text-2xl font-bold text-gray-900">Second Space</h1>
             <p className="text-sm text-gray-600">Choose your treats</p>
           </div>
-          <button
+          <motion.button
             onClick={() => setCartOpen(true)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             className="relative p-3 rounded-full bg-primary-600 text-white hover:bg-primary-700 transition-colors"
           >
             <ShoppingCart className="w-6 h-6" />
-            {cartItemCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                {cartItemCount}
-              </span>
-            )}
-          </button>
+            <AnimatePresence>
+              {cartItemCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: 'spring', damping: 15, stiffness: 300 }}
+                  className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center"
+                >
+                  {cartItemCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
         </div>
       </div>
 
@@ -216,8 +247,9 @@ export default function ShoppingPage() {
       <div className="max-w-7xl mx-auto p-4 mt-6">
         {products.length === 0 ? (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            variants={fadeInUp}
+            initial="initial"
+            animate="animate"
             className="flex flex-col items-center justify-center py-16 px-4"
           >
             <div className="glass-strong rounded-3xl p-12 text-center max-w-md">
@@ -229,13 +261,18 @@ export default function ShoppingPage() {
             </div>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
+          <motion.div
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {products.map((product, index) => (
               <motion.div
                 key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-strong rounded-3xl overflow-hidden hover:shadow-2xl transition-shadow cursor-pointer"
+                variants={staggerItem}
+                whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                className="glass-strong rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl transition-shadow cursor-pointer"
                 onClick={() => setSelectedProduct(product)}
               >
                 <div className="aspect-square bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center p-8">
@@ -275,7 +312,7 @@ export default function ShoppingPage() {
                 </div>
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
 
@@ -286,7 +323,7 @@ export default function ShoppingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
             onClick={() => setSelectedProduct(null)}
           >
             <motion.div
@@ -355,14 +392,14 @@ export default function ShoppingPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/50"
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
               onClick={() => setCartOpen(false)}
             />
             <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25 }}
+              variants={slideInRight}
+              initial="initial"
+              animate="animate"
+              exit="exit"
               className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md glass-strong shadow-2xl flex flex-col"
             >
               <div className="p-6 border-b flex items-center justify-between">
@@ -384,9 +421,18 @@ export default function ShoppingPage() {
                     <p className="text-gray-600">Your cart is empty</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {session.basket.map((item) => (
-                      <div key={item.productId} className="flex items-center gap-4 p-4 rounded-2xl bg-white/50">
+                  <motion.div
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                    className="space-y-4"
+                  >
+                    {session.basket.map((item, index) => (
+                      <motion.div
+                        key={item.productId}
+                        variants={staggerItem}
+                        className="flex items-center gap-4 p-4 rounded-2xl bg-white/50 hover:bg-white/70 transition-colors"
+                      >
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">{item.productName}</h3>
                           <p className="text-primary-600 font-medium">
@@ -412,9 +458,9 @@ export default function ShoppingPage() {
                             <Plus className="w-4 h-4" />
                           </motion.button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
-                  </div>
+                  </motion.div>
                 )}
               </div>
 
@@ -444,6 +490,6 @@ export default function ShoppingPage() {
           </>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

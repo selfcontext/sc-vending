@@ -27,10 +27,10 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
 
       setTimeLeft(remaining);
 
-      // Show warning 15 seconds before expiry
-      if (remaining <= 15000 && remaining > 0) {
+      // Show warning 30 seconds before expiry
+      if (remaining <= 30000 && remaining > 0 && !showWarning) {
         setShowWarning(true);
-      } else {
+      } else if (remaining > 30000 && showWarning) {
         setShowWarning(false);
       }
 
@@ -66,8 +66,17 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
   return (
     <>
       {/* Compact Timer Display */}
-      <div className="fixed top-4 right-4 z-50">
-        <div className="flex items-center gap-3 px-4 py-2 bg-white/95 backdrop-blur rounded-full shadow-lg">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 20 }}
+        className="fixed top-4 right-4 z-50"
+      >
+        <motion.div
+          animate={showWarning ? { scale: [1, 1.05, 1] } : {}}
+          transition={{ duration: 0.5, repeat: showWarning ? Infinity : 0, repeatDelay: 0.5 }}
+          className="flex items-center gap-3 px-4 py-2 bg-white/95 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-shadow"
+        >
           <div className="relative w-10 h-10">
             <svg className="transform -rotate-90 w-10 h-10">
               <circle
@@ -101,8 +110,8 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
             </p>
             <p className="text-xs text-gray-600">Time left</p>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Extension Warning Modal */}
       <AnimatePresence>
@@ -111,12 +120,18 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                // Don't allow closing by clicking outside during warning
+              }
+            }}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
             >
               <div className="flex items-center justify-center mb-6">
@@ -142,12 +157,14 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
               </p>
 
               <div className="flex gap-4">
-                <button
+                <motion.button
                   onClick={onExtend}
-                  className="flex-1 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex-1 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 transition-all shadow-lg hover:shadow-xl"
                 >
-                  Extend Session
-                </button>
+                  Extend Session (+2 min)
+                </motion.button>
               </div>
 
               <p className="text-center text-xs text-gray-500 mt-4">
