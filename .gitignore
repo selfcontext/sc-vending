@@ -1,11 +1,14 @@
 # Miscellaneous
 *.class
-*.lock
 *.log
 *.pyc
 *.swp
 .buildlog/
 .history
+
+# Node.js
+node_modules/
+package-lock.json
 
 
 
