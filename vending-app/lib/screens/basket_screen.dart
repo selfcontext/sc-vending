@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import '../models/session.dart';
@@ -15,6 +16,7 @@ class BasketScreen extends StatefulWidget {
 
 class _BasketScreenState extends State<BasketScreen> {
   VendingSession? _session;
+  StreamSubscription<VendingSession?>? _sessionSubscription;
 
   @override
   void initState() {
@@ -22,21 +24,35 @@ class _BasketScreenState extends State<BasketScreen> {
     _listenToSession();
   }
 
+  @override
+  void dispose() {
+    _sessionSubscription?.cancel();
+    super.dispose();
+  }
+
   void _listenToSession() {
-    FirebaseService.watchSession(widget.sessionId).listen((session) {
-      if (session == null || !mounted) return;
+    _sessionSubscription = FirebaseService.watchSession(widget.sessionId).listen(
+      (session) {
+        if (session == null || !mounted) return;
 
-      setState(() => _session = session);
+        setState(() => _session = session);
 
-      // Navigate to dispensing screen when payment is completed
-      if (session.hasPayment && session.status == 'completed') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => DispensingScreen(sessionId: widget.sessionId),
-          ),
+        // Navigate to dispensing screen when payment is completed
+        if (session.hasPayment && session.status == 'completed') {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => DispensingScreen(sessionId: widget.sessionId),
+            ),
+          );
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session error: $error')),
         );
-      }
-    });
+      },
+    );
   }
 
   @override

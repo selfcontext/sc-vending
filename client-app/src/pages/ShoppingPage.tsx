@@ -213,50 +213,70 @@ export default function ShoppingPage() {
       </div>
 
       {/* Product Grid */}
-      <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-        {products.map((product) => (
+      <div className="max-w-7xl mx-auto p-4 mt-6">
+        {products.length === 0 ? (
           <motion.div
-            key={product.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-strong rounded-3xl overflow-hidden hover:shadow-2xl transition-shadow cursor-pointer"
-            onClick={() => setSelectedProduct(product)}
+            className="flex flex-col items-center justify-center py-16 px-4"
           >
-            <div className="aspect-square bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center p-8">
-              {product.imageUrl ? (
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://via.placeholder.com/300?text=Product';
-                  }}
-                />
-              ) : (
-                <Package className="w-24 h-24 text-primary-400" />
-              )}
-            </div>
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">{product.name}</h3>
-              <p className="text-gray-600 text-sm mb-4 line-clamp-2">{product.description}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-primary-600">
-                  ${(product.price / 100).toFixed(2)}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    addToBasket(product);
-                  }}
-                  className="px-6 py-2 bg-primary-600 text-white rounded-full font-medium hover:bg-primary-700 transition-colors flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add
-                </button>
-              </div>
+            <div className="glass-strong rounded-3xl p-12 text-center max-w-md">
+              <Package className="w-24 h-24 text-gray-400 mx-auto mb-6" />
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">No Products Available</h3>
+              <p className="text-gray-600">
+                There are currently no products in the vending machine. Please check back later!
+              </p>
             </div>
           </motion.div>
-        ))}
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map((product) => (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-strong rounded-3xl overflow-hidden hover:shadow-2xl transition-shadow cursor-pointer"
+                onClick={() => setSelectedProduct(product)}
+              >
+                <div className="aspect-square bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center p-8">
+                  {product.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://via.placeholder.com/300?text=Product';
+                      }}
+                    />
+                  ) : (
+                    <Package className="w-24 h-24 text-primary-400" />
+                  )}
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{product.name}</h3>
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{product.description}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-bold text-primary-600">
+                      ${(product.price / 100).toFixed(2)}
+                    </span>
+                    <motion.button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToBasket(product);
+                      }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-6 py-2 bg-primary-600 text-white rounded-full font-medium hover:bg-primary-700 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Product Detail Modal */}
@@ -311,13 +331,15 @@ export default function ShoppingPage() {
                   <span className="text-3xl font-bold text-primary-600">
                     ${(selectedProduct.price / 100).toFixed(2)}
                   </span>
-                  <button
+                  <motion.button
                     onClick={() => addToBasket(selectedProduct)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="px-8 py-3 bg-primary-600 text-white rounded-full font-medium hover:bg-primary-700 transition-colors flex items-center gap-2"
                   >
                     <Plus className="w-5 h-5" />
                     Add to Cart
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             </motion.div>
@@ -345,12 +367,14 @@ export default function ShoppingPage() {
             >
               <div className="p-6 border-b flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">Your Cart</h2>
-                <button
+                <motion.button
                   onClick={() => setCartOpen(false)}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   className="p-2 rounded-full hover:bg-gray-200 transition-colors"
                 >
                   <X className="w-6 h-6" />
-                </button>
+                </motion.button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
@@ -370,19 +394,23 @@ export default function ShoppingPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
+                          <motion.button
                             onClick={() => updateQuantity(item.productId, -1)}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
                             className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors"
                           >
                             <Minus className="w-4 h-4" />
-                          </button>
+                          </motion.button>
                           <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                          <button
+                          <motion.button
                             onClick={() => updateQuantity(item.productId, 1)}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
                             className="p-2 rounded-full bg-primary-600 text-white hover:bg-primary-700 transition-colors"
                           >
                             <Plus className="w-4 h-4" />
-                          </button>
+                          </motion.button>
                         </div>
                       </div>
                     ))}
@@ -398,16 +426,18 @@ export default function ShoppingPage() {
                       ${(session.totalAmount / 100).toFixed(2)}
                     </span>
                   </div>
-                  <button
+                  <motion.button
                     onClick={() => {
                       setCartOpen(false);
                       navigate(`/checkout/${sessionId}`);
                     }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     className="w-full py-4 bg-primary-600 text-white rounded-2xl font-semibold hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
                   >
                     Proceed to Checkout
                     <ArrowRight className="w-5 h-5" />
-                  </button>
+                  </motion.button>
                 </div>
               )}
             </motion.div>

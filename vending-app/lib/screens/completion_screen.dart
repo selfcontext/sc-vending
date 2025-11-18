@@ -20,6 +20,7 @@ class _CompletionScreenState extends State<CompletionScreen>
   late AnimationController _heartController;
   int _countdown = 10;
   Timer? _countdownTimer;
+  StreamSubscription<VendingSession?>? _sessionSubscription;
 
   @override
   void initState() {
@@ -37,15 +38,24 @@ class _CompletionScreenState extends State<CompletionScreen>
   void dispose() {
     _heartController.dispose();
     _countdownTimer?.cancel();
+    _sessionSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> _loadSession() async {
-    FirebaseService.watchSession(widget.sessionId).listen((session) {
-      if (session != null && mounted) {
-        setState(() => _session = session);
-      }
-    });
+    _sessionSubscription = FirebaseService.watchSession(widget.sessionId).listen(
+      (session) {
+        if (session != null && mounted) {
+          setState(() => _session = session);
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session error: $error')),
+        );
+      },
+    );
   }
 
   void _startCountdown() {

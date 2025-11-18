@@ -22,6 +22,8 @@ class _DispensingScreenState extends State<DispensingScreen> {
   final Map<String, int> _retryCount = {};
   bool _isProcessing = false;
   static const int maxRetries = 2;
+  StreamSubscription<VendingSession?>? _sessionSubscription;
+  StreamSubscription<List<VendingEvent>>? _eventsSubscription;
 
   @override
   void initState() {
@@ -30,41 +32,64 @@ class _DispensingScreenState extends State<DispensingScreen> {
     _listenToEvents();
   }
 
+  @override
+  void dispose() {
+    _sessionSubscription?.cancel();
+    _eventsSubscription?.cancel();
+    super.dispose();
+  }
+
   void _listenToSession() {
-    FirebaseService.watchSession(widget.sessionId).listen((session) {
-      if (session == null || !mounted) return;
+    _sessionSubscription = FirebaseService.watchSession(widget.sessionId).listen(
+      (session) {
+        if (session == null || !mounted) return;
 
-      setState(() => _session = session);
+        setState(() => _session = session);
 
-      // Check if all items are dispensed or failed
-      if (_isComplete(session)) {
-        Timer(const Duration(seconds: 2), () {
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => CompletionScreen(sessionId: widget.sessionId),
-              ),
-            );
-          }
-        });
-      }
-    });
+        // Check if all items are dispensed or failed
+        if (_isComplete(session)) {
+          Timer(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => CompletionScreen(sessionId: widget.sessionId),
+                ),
+              );
+            }
+          });
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session error: $error')),
+        );
+      },
+    );
   }
 
   void _listenToEvents() {
-    FirebaseService.watchEvents().listen((events) {
-      if (!mounted) return;
+    _eventsSubscription = FirebaseService.watchEvents().listen(
+      (events) {
+        if (!mounted) return;
 
-      final productDispatchEvents = events.where((e) => e.isProductDispatch).toList();
+        final productDispatchEvents = events.where((e) => e.isProductDispatch).toList();
 
-      setState(() {
-        _pendingEvents.clear();
-        _pendingEvents.addAll(productDispatchEvents);
-      });
+        setState(() {
+          _pendingEvents.clear();
+          _pendingEvents.addAll(productDispatchEvents);
+        });
 
-      // Process events
-      _processNextEvent();
-    });
+        // Process events
+        _processNextEvent();
+      },
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Event error: $error')),
+        );
+      },
+    );
   }
 
   Future<void> _processNextEvent() async {

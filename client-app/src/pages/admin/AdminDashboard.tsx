@@ -36,6 +36,7 @@ import { Product, Session } from '@/types';
 import toast from 'react-hot-toast';
 import { uploadImage, deleteImage, UploadProgress } from '@/lib/image-upload';
 import AdminLayout from '@/components/AdminLayout';
+import ConfirmModal from '@/components/ConfirmModal';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -46,6 +47,8 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'sessions'>('products');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -87,6 +90,19 @@ export default function AdminDashboard() {
       unsubSessions();
     };
   }, [isAdmin, navigate]);
+
+  const handleDeleteProduct = async () => {
+    if (!productToDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'inventory', productToDelete));
+      toast.success('Product deleted');
+    } catch (error) {
+      toast.error('Failed to delete product');
+    } finally {
+      setProductToDelete(null);
+    }
+  };
 
   const stats = {
     totalProducts: products.length,
@@ -169,27 +185,23 @@ export default function AdminDashboard() {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Inventory Management</h2>
-                <button
+                <motion.button
                   onClick={() => setIsAddingProduct(true)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
                   Add Product
-                </button>
+                </motion.button>
               </div>
 
               <ProductList
                 products={products}
                 onEdit={setEditingProduct}
-                onDelete={async (productId) => {
-                  if (confirm('Are you sure you want to delete this product?')) {
-                    try {
-                      await deleteDoc(doc(db, 'inventory', productId));
-                      toast.success('Product deleted');
-                    } catch (error) {
-                      toast.error('Failed to delete product');
-                    }
-                  }
+                onDelete={(productId) => {
+                  setProductToDelete(productId);
+                  setDeleteConfirmOpen(true);
                 }}
               />
             </div>
@@ -237,6 +249,21 @@ export default function AdminDashboard() {
           />
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setProductToDelete(null);
+        }}
+        onConfirm={handleDeleteProduct}
+        title="Delete Product"
+        message="Are you sure you want to delete this product? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
       </div>
     </AdminLayout>
   );
@@ -341,6 +368,22 @@ function ProductList({
 }
 
 function SessionList({ sessions }: { sessions: Session[] }) {
+  if (sessions.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-center py-12 px-4"
+      >
+        <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sessions Yet</h3>
+        <p className="text-gray-600 text-sm">
+          Active sessions will appear here when customers start shopping.
+        </p>
+      </motion.div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {sessions.map((session) => (

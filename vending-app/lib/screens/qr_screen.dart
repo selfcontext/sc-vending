@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lottie/lottie.dart';
@@ -16,6 +17,8 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
   VendingSession? _session;
   bool _loading = true;
   late AnimationController _pulseController;
+  StreamSubscription<VendingSession?>? _sessionSubscription;
+  Timer? _countdownTimer;
 
   @override
   void initState() {
@@ -25,12 +28,26 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
     _createSession();
+    _startCountdownTimer();
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _sessionSubscription?.cancel();
+    _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  void _startCountdownTimer() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      // Trigger rebuild to update countdown display
+      setState(() {});
+    });
   }
 
   Future<void> _createSession() async {
@@ -57,20 +74,29 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
   }
 
   void _listenToSession(String sessionId) {
-    FirebaseService.watchSession(sessionId).listen((session) {
-      if (session == null || !mounted) return;
+    _sessionSubscription?.cancel();
+    _sessionSubscription = FirebaseService.watchSession(sessionId).listen(
+      (session) {
+        if (session == null || !mounted) return;
 
-      setState(() => _session = session);
+        setState(() => _session = session);
 
-      // Navigate to basket screen when there's activity
-      if (session.basket.isNotEmpty && session.status == 'active') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => BasketScreen(sessionId: sessionId),
-          ),
+        // Navigate to basket screen when there's activity
+        if (session.basket.isNotEmpty && session.status == 'active') {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => BasketScreen(sessionId: sessionId),
+            ),
+          );
+        }
+      },
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session error: $error')),
         );
-      }
-    });
+      },
+    );
   }
 
   @override

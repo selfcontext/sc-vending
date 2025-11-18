@@ -334,33 +334,47 @@ export default function AnalyticsPage() {
         {/* Transaction Logs */}
         <div className="glass-strong rounded-2xl p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {logs.map((log) => (
-              <motion.div
-                key={log.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center justify-between p-4 rounded-lg bg-white/50 hover:bg-white/80 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-primary-600" />
-                  <div>
-                    <p className="font-medium text-gray-900 capitalize">
-                      {log.type.replace(/_/g, ' ')}
-                    </p>
-                    {log.sessionId && (
-                      <p className="text-sm text-gray-600">
-                        Session: {log.sessionId.substring(0, 8)}...
+          {logs.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12"
+            >
+              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Activity Yet</h3>
+              <p className="text-gray-600 text-sm">
+                Transaction logs will appear here once customers start using the vending machine.
+              </p>
+            </motion.div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {logs.map((log) => (
+                <motion.div
+                  key={log.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center justify-between p-4 rounded-lg bg-white/50 hover:bg-white/80 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-primary-600" />
+                    <div>
+                      <p className="font-medium text-gray-900 capitalize">
+                        {log.type.replace(/_/g, ' ')}
                       </p>
-                    )}
+                      {log.sessionId && (
+                        <p className="text-sm text-gray-600">
+                          Session: {log.sessionId.substring(0, 8)}...
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <span className="text-sm text-gray-600">
-                  {log.timestamp.toLocaleTimeString()}
-                </span>
-              </motion.div>
-            ))}
-          </div>
+                  <span className="text-sm text-gray-600">
+                    {log.timestamp.toLocaleTimeString()}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

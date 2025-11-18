@@ -126,57 +126,71 @@ export default function MachineStatusPage() {
     <AdminLayout>
       <div className="p-8">
         {/* Machines Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {machines.map((machine) => {
-            const status = getMachineStatus(machine);
-            return (
-              <motion.div
-                key={machine.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-strong rounded-2xl p-6 hover:shadow-xl transition-shadow cursor-pointer"
-                onClick={() => setSelectedMachine(machine)}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">{machine.name}</h3>
-                    <p className="text-sm text-gray-600">{machine.location}</p>
-                  </div>
-                  <div className={`p-2 rounded-lg ${getStatusColor(status)}`}>
-                    {getStatusIcon(status)}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Status</span>
-                    <span className={`font-semibold capitalize ${status === 'online' ? 'text-green-600' : status === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
-                      {status}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Last Heartbeat</span>
-                    <span className="font-medium text-gray-900">
-                      {machine.lastHeartbeat
-                        ? new Date(machine.lastHeartbeat).toLocaleTimeString()
-                        : 'Never'}
-                    </span>
-                  </div>
-
-                  {machine.currentSessionId && (
-                    <div className="mt-3 pt-3 border-t">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Activity className="w-4 h-4 text-blue-600" />
-                        <span className="text-blue-600 font-medium">Active Session</span>
-                      </div>
+        {machines.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-strong rounded-2xl p-12 text-center mb-8"
+          >
+            <Wrench className="w-20 h-20 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">No Machines Registered</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              No vending machines are currently registered in the system. Machines will appear here once they come online.
+            </p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {machines.map((machine) => {
+              const status = getMachineStatus(machine);
+              return (
+                <motion.div
+                  key={machine.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-strong rounded-2xl p-6 hover:shadow-xl transition-shadow cursor-pointer"
+                  onClick={() => setSelectedMachine(machine)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">{machine.name}</h3>
+                      <p className="text-sm text-gray-600">{machine.location}</p>
                     </div>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+                    <div className={`p-2 rounded-lg ${getStatusColor(status)}`}>
+                      {getStatusIcon(status)}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Status</span>
+                      <span className={`font-semibold capitalize ${status === 'online' ? 'text-green-600' : status === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
+                        {status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Last Heartbeat</span>
+                      <span className="font-medium text-gray-900">
+                        {machine.lastHeartbeat
+                          ? new Date(machine.lastHeartbeat).toLocaleTimeString()
+                          : 'Never'}
+                      </span>
+                    </div>
+
+                    {machine.currentSessionId && (
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Activity className="w-4 h-4 text-blue-600" />
+                          <span className="text-blue-600 font-medium">Active Session</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Manual Dispense Test Section */}
         <div className="glass-strong rounded-2xl p-8">
