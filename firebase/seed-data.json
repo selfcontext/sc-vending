@@ -1,0 +1,97 @@
+{
+  "config": {
+    "app": {
+      "sessionTimeoutMinutes": 3,
+      "maxRetries": 2,
+      "enableAnalytics": true,
+      "maintenanceMode": false
+    }
+  },
+  "vendingMachines": {
+    "machine_001": {
+      "id": "machine_001",
+      "name": "Second Space Vending #1",
+      "location": "Main Building, Floor 1",
+      "status": "online",
+      "lastHeartbeat": "SERVER_TIMESTAMP",
+      "configuration": {
+        "sessionTimeout": 3,
+        "maxRetries": 2
+      }
+    }
+  },
+  "inventory": [
+    {
+      "name": "Coca Cola",
+      "description": "Classic refreshing cola drink",
+      "imageUrl": "https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400",
+      "slot": 11,
+      "price": 3500,
+      "quantity": 10,
+      "vendingMachineId": "machine_001",
+      "category": "drinks",
+      "isActive": true,
+      "allergens": []
+    },
+    {
+      "name": "Mineral Water",
+      "description": "Pure mineral water 500ml",
+      "imageUrl": "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400",
+      "slot": 12,
+      "price": 2500,
+      "quantity": 15,
+      "vendingMachineId": "machine_001",
+      "category": "drinks",
+      "isActive": true,
+      "allergens": []
+    },
+    {
+      "name": "Potato Chips",
+      "description": "Crispy salted potato chips",
+      "imageUrl": "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400",
+      "slot": 21,
+      "price": 4000,
+      "quantity": 8,
+      "vendingMachineId": "machine_001",
+      "category": "snacks",
+      "isActive": true,
+      "allergens": ["gluten"]
+    },
+    {
+      "name": "Chocolate Bar",
+      "description": "Smooth milk chocolate bar",
+      "imageUrl": "https://images.unsplash.com/photo-1511381939415-e44015466834?w=400",
+      "slot": 22,
+      "price": 3000,
+      "quantity": 12,
+      "vendingMachineId": "machine_001",
+      "category": "snacks",
+      "isActive": true,
+      "allergens": ["milk", "soy"]
+    },
+    {
+      "name": "Iced Coffee",
+      "description": "Cold brew coffee drink",
+      "imageUrl": "https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=400",
+      "slot": 31,
+      "price": 4500,
+      "quantity": 6,
+      "vendingMachineId": "machine_001",
+      "category": "drinks",
+      "isActive": true,
+      "allergens": ["milk"]
+    },
+    {
+      "name": "Energy Drink",
+      "description": "High energy boost drink",
+      "imageUrl": "https://images.unsplash.com/photo-1622543925917-763c34f6f676?w=400",
+      "slot": 32,
+      "price": 5000,
+      "quantity": 10,
+      "vendingMachineId": "machine_001",
+      "category": "drinks",
+      "isActive": true,
+      "allergens": []
+    }
+  ]
+}
