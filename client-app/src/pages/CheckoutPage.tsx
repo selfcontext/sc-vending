@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CreditCard, Loader, ArrowLeft, CheckCircle } from 'lucide-react';
 import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { Session } from '@/types';
 import { PaymentService } from '@/services/payment.service';
@@ -58,19 +59,31 @@ export default function CheckoutPage() {
       });
 
       if (result.success) {
+        const transactionId = result.transactionId || `pay_${Date.now()}`;
+
         // Update session with payment info
         const payment = {
-          id: result.transactionId || `pay_${Date.now()}`,
+          id: transactionId,
           amount: session.totalAmount,
           status: 'completed' as const,
           method: 'mock_payment',
           timestamp: new Date(),
-          transactionId: result.transactionId,
+          transactionId,
         };
 
         await updateDoc(doc(db, 'sessions', sessionId), {
           payments: arrayUnion(payment),
           status: 'completed',
+        });
+
+        // Call Cloud Function to create ProductDispatch events for vending machine
+        // This triggers the dispense flow that the vending app listens for
+        const functions = getFunctions();
+        const processPaymentFn = httpsCallable(functions, 'processPayment');
+        await processPaymentFn({
+          sessionId,
+          transactionId,
+          amount: session.totalAmount,
         });
 
         toast.success('Payment successful!');

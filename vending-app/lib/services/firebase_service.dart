@@ -52,9 +52,16 @@ class FirebaseService {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final events = snapshot.docs
           .map((doc) => VendingEvent.fromFirestore(doc))
           .toList();
+      // Sort by timestamp first, then by sequenceNumber for deterministic ordering
+      events.sort((a, b) {
+        final timestampCompare = a.timestamp.compareTo(b.timestamp);
+        if (timestampCompare != 0) return timestampCompare;
+        return a.sequenceNumber.compareTo(b.sequenceNumber);
+      });
+      return events;
     });
   }
 

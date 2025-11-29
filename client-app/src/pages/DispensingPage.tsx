@@ -99,9 +99,10 @@ export default function DispensingPage() {
           {/* Item Status List */}
           <div className="space-y-3 mb-8">
             {session.basket.map((item) => {
-              const itemDispenseStatuses = session.dispensedItems.filter(
-                (di) => di.productId === item.productId
-              );
+              // Filter and sort by timestamp to ensure correct ordering regardless of processing order
+              const itemDispenseStatuses = session.dispensedItems
+                .filter((di) => di.productId === item.productId)
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
               return (
                 <div key={item.productId}>

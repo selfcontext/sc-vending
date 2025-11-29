@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
-import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { Session, BasketItem } from '@/types';
 import toast from 'react-hot-toast';
@@ -94,18 +95,19 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
     if (!sessionId || !sessionExistsRef.current) return;
 
     try {
-      const newExpiresAt = new Date(Date.now() + 2 * 60 * 1000); // +2 minutes
+      // Use Cloud Function to extend session with proper validation and logging
+      const functions = getFunctions();
+      const extendSessionFn = httpsCallable(functions, 'extendSession');
+      await extendSessionFn({ sessionId });
 
-      await updateDoc(doc(db, 'sessions', sessionId), {
-        expiresAt: newExpiresAt,
-        extendedCount: increment(1),
-        updatedAt: new Date(),
-      });
-
-      toast.success('Session extended by 2 minutes');
-    } catch (err) {
+      toast.success('Session extended successfully!');
+    } catch (err: any) {
       console.error('Failed to extend session:', err);
-      toast.error('Failed to extend session');
+      if (err.code === 'functions/failed-precondition') {
+        toast.error(err.message || 'Session cannot be extended');
+      } else {
+        toast.error('Failed to extend session');
+      }
       throw err;
     }
   }, [sessionId]);

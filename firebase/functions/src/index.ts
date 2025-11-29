@@ -158,6 +158,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     });
 
     // Create ProductDispatch events for each item in basket
+    // Use sequenceNumber to ensure deterministic ordering even with same timestamp
+    let sequenceNumber = 0;
     for (const item of session.basket) {
       for (let i = 0; i < item.quantity; i++) {
         await db.collection('events').add({
@@ -171,6 +173,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
             price: item.price,
           },
           timestamp: now,
+          sequenceNumber: sequenceNumber++,
           processed: false,
         });
       }
@@ -236,6 +239,41 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
       timestamp: now,
       processed: false,
     });
+
+    // If dispense failed, create a RefundRequested event for audit trail and refund processing
+    if (!success) {
+      const basketItem = session.basket.find((item: any) => item.productId === productId);
+      const refundAmount = basketItem?.price || 0;
+
+      await db.collection('events').add({
+        type: 'RefundRequested',
+        sessionId,
+        vendingMachineId: session.vendingMachineId,
+        payload: {
+          productId,
+          productName: basketItem?.productName || 'Unknown',
+          slot,
+          refundAmount,
+          reason: 'dispense_failed',
+        },
+        timestamp: now,
+        processed: false,
+      });
+
+      // Log the refund request for processing
+      await db.collection('transactionLogs').add({
+        type: 'refund_requested',
+        sessionId,
+        vendingMachineId: session.vendingMachineId,
+        details: {
+          productId,
+          productName: basketItem?.productName || 'Unknown',
+          refundAmount,
+          reason: 'dispense_failed',
+        },
+        timestamp: now,
+      });
+    }
 
     // Update inventory
     if (success) {

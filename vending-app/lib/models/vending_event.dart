@@ -7,6 +7,7 @@ class VendingEvent {
   final String vendingMachineId;
   final Map<String, dynamic> payload;
   final DateTime timestamp;
+  final int sequenceNumber;
   final bool processed;
 
   VendingEvent({
@@ -16,6 +17,7 @@ class VendingEvent {
     required this.vendingMachineId,
     required this.payload,
     required this.timestamp,
+    required this.sequenceNumber,
     required this.processed,
   });
 
@@ -29,6 +31,7 @@ class VendingEvent {
       vendingMachineId: data['vendingMachineId'] ?? '',
       payload: data['payload'] as Map<String, dynamic>? ?? {},
       timestamp: (data['timestamp'] as Timestamp).toDate(),
+      sequenceNumber: data['sequenceNumber'] ?? 0,
       processed: data['processed'] ?? false,
     );
   }

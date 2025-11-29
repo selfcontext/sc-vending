@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Package, X, Plus, Minus, ArrowRight } from 'lucide-react';
@@ -21,6 +21,7 @@ export default function ShoppingPage() {
   const [loading, setLoading] = useState(true);
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -40,8 +41,9 @@ export default function ShoppingPage() {
             completedAt: data.completedAt?.toDate(),
           } as Session);
 
-          // Check if session has been paid
-          if (data.status === 'completed' || data.payments?.some((p: any) => p.status === 'completed')) {
+          // Check if session has been paid (with navigation guard to prevent multiple triggers)
+          if ((data.status === 'completed' || data.payments?.some((p: any) => p.status === 'completed')) && !hasNavigatedRef.current) {
+            hasNavigatedRef.current = true;
             navigate(`/dispensing/${sessionId}`);
           }
         } else {
