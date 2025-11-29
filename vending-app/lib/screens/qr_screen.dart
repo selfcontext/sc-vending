@@ -16,6 +16,7 @@ class QrScreen extends StatefulWidget {
 class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin {
   VendingSession? _session;
   bool _loading = true;
+  bool _hasNavigated = false;
   late AnimationController _pulseController;
   StreamSubscription<VendingSession?>? _sessionSubscription;
   Timer? _countdownTimer;
@@ -81,8 +82,9 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
 
         setState(() => _session = session);
 
-        // Navigate to basket screen when there's activity
-        if (session.basket.isNotEmpty && session.status == 'active') {
+        // Navigate to basket screen when there's activity (with guard to prevent multiple triggers)
+        if (session.basket.isNotEmpty && session.status == 'active' && !_hasNavigated) {
+          _hasNavigated = true;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => BasketScreen(sessionId: sessionId),

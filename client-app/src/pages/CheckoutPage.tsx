@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CreditCard, Loader, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -13,6 +13,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [processing, setProcessing] = useState(false);
+  const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -29,8 +30,9 @@ export default function CheckoutPage() {
           completedAt: data.completedAt?.toDate(),
         } as Session);
 
-        // Check if payment completed
-        if (data.payments?.some((p: any) => p.status === 'completed')) {
+        // Check if payment completed (with navigation guard to prevent multiple triggers)
+        if (data.payments?.some((p: any) => p.status === 'completed') && !hasNavigatedRef.current) {
+          hasNavigatedRef.current = true;
           navigate(`/dispensing/${sessionId}`);
         }
       }

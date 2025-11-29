@@ -199,6 +199,13 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
 
   try {
     const sessionRef = db.collection('sessions').doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+
+    if (!sessionDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Session not found');
+    }
+
+    const session = sessionDoc.data()!;
     const now = admin.firestore.Timestamp.now();
 
     const dispensedItem = {
@@ -224,7 +231,7 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
     await db.collection('events').add({
       type: success ? 'DispenseSuccess' : 'DispenseFailed',
       sessionId,
-      vendingMachineId: (await sessionRef.get()).data()!.vendingMachineId,
+      vendingMachineId: session.vendingMachineId,
       payload: { productId, slot },
       timestamp: now,
       processed: false,
@@ -250,7 +257,7 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
           await db.collection('events').add({
             type: 'StockLow',
             sessionId,
-            vendingMachineId: (await sessionRef.get()).data()!.vendingMachineId,
+            vendingMachineId: session.vendingMachineId,
             payload: { productId: inventoryDoc.id, quantity: newQuantity },
             timestamp: now,
             processed: false,

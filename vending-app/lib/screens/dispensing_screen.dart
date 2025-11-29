@@ -363,9 +363,11 @@ class _DispensingScreenState extends State<DispensingScreen> {
   }
 
   Widget _buildItemStatus(BasketItem basketItem, ThemeData theme) {
+    // Filter and sort by timestamp to ensure correct ordering regardless of processing order
     final itemDispenses = _session!.dispensedItems
         .where((di) => di.productId == basketItem.productId)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

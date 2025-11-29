@@ -105,7 +105,8 @@ class VendingSession {
   bool get hasPayment => status == 'completed';
 
   bool get allItemsDispensed =>
-      dispensedItems.length == basket.fold<int>(0, (sum, item) => sum + item.quantity);
+      dispensedItems.where((item) => item.status == 'dispensed').length ==
+      basket.fold<int>(0, (sum, item) => sum + item.quantity);
 
   int get successfullyDispensedCount =>
       dispensedItems.where((item) => item.status == 'dispensed').length;

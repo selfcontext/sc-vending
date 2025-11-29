@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Session, BasketItem } from '@/types';
@@ -24,6 +24,8 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  // Ref to track session existence for stable callbacks (avoids recreating on every session update)
+  const sessionExistsRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -48,8 +50,10 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
             expiresAt: data.expiresAt?.toDate(),
             updatedAt: data.updatedAt?.toDate(),
           } as Session);
+          sessionExistsRef.current = true;
         } else {
           setSession(null);
+          sessionExistsRef.current = false;
           setError(new Error('Session not found'));
         }
         setLoading(false);
@@ -67,7 +71,7 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
 
   const updateBasket = useCallback(
     async (items: BasketItem[]) => {
-      if (!sessionId || !session) return;
+      if (!sessionId || !sessionExistsRef.current) return;
 
       try {
         const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -83,11 +87,11 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
         throw err;
       }
     },
-    [sessionId, session]
+    [sessionId]
   );
 
   const extendSession = useCallback(async () => {
-    if (!sessionId || !session) return;
+    if (!sessionId || !sessionExistsRef.current) return;
 
     try {
       const newExpiresAt = new Date(Date.now() + 2 * 60 * 1000); // +2 minutes
@@ -104,7 +108,7 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
       toast.error('Failed to extend session');
       throw err;
     }
-  }, [sessionId, session]);
+  }, [sessionId]);
 
   const refreshSession = useCallback(() => {
     // Force a re-fetch by toggling a state

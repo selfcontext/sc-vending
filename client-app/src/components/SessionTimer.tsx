@@ -18,7 +18,7 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
     // Calculate initial total duration
     const now = Date.now();
     const expires = expiresAt.getTime();
-    setTotalDuration(expires - (now - (expires - now)));
+    setTotalDuration(expires - now);
 
     const interval = setInterval(() => {
       const now = Date.now();
