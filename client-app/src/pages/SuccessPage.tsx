@@ -37,7 +37,6 @@ export default function SuccessPage() {
     return null;
   }
 
-  const successfulItems = session.dispensedItems.filter((item) => item.status === 'dispensed');
   const failedItems = session.dispensedItems.filter((item) => item.status === 'failed');
   const refundAmount = failedItems.reduce((sum, item) => {
     const basketItem = session.basket.find((b) => b.productId === item.productId);

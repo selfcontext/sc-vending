@@ -9,9 +9,7 @@ import { Product, Session, BasketItem } from '@/types';
 import SessionTimer from '@/components/SessionTimer';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import toast from 'react-hot-toast';
-import Lottie from 'lottie-react';
-import shoppingAnimation from '@/assets/animations/shopping.json';
-import { staggerContainer, staggerItem, fadeInUp, slideInRight, scaleIn, pageTransition } from '@/lib/animations';
+import { staggerContainer, staggerItem, fadeInUp, slideInRight, pageTransition } from '@/lib/animations';
 
 export default function ShoppingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -182,7 +180,7 @@ export default function ShoppingPage() {
     try {
       const functions = getFunctions();
       const extendSession = httpsCallable(functions, 'extendSession');
-      const result = await extendSession({ sessionId });
+      await extendSession({ sessionId });
 
       toast.success('Session extended successfully!');
     } catch (error: any) {
@@ -232,7 +230,6 @@ export default function ShoppingPage() {
       {session && session.status === 'active' && (
         <SessionTimer
           expiresAt={session.expiresAt}
-          sessionId={sessionId!}
           extendedCount={session.extendedCount || 0}
           onExtend={handleExtendSession}
         />
@@ -293,7 +290,7 @@ export default function ShoppingPage() {
             animate="animate"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {products.map((product, index) => (
+            {products.map((product) => (
               <motion.div
                 key={product.id}
                 variants={staggerItem}
@@ -453,7 +450,7 @@ export default function ShoppingPage() {
                     animate="animate"
                     className="space-y-4"
                   >
-                    {session.basket.map((item, index) => (
+                    {session.basket.map((item) => (
                       <motion.div
                         key={item.productId}
                         variants={staggerItem}

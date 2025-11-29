@@ -45,7 +45,7 @@ export class PaymentService {
    */
   static async processPayment(request: PaymentRequest): Promise<PaymentResponse> {
     // Note: Remove console.log in production to prevent information leakage
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Processing payment:', request);
     }
 
@@ -74,7 +74,7 @@ export class PaymentService {
    * Verify payment status
    */
   static async verifyPayment(transactionId: string): Promise<boolean> {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Verifying payment:', transactionId);
     }
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -85,7 +85,7 @@ export class PaymentService {
    * Request refund
    */
   static async requestRefund(transactionId: string, amount: number): Promise<PaymentResponse> {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Requesting refund:', { transactionId, amount });
     }
     await new Promise(resolve => setTimeout(resolve, 1500));

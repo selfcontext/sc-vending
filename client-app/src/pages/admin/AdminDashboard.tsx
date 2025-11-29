@@ -6,7 +6,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  LogOut,
   Activity,
   DollarSign,
   ShoppingBag,
@@ -14,7 +13,6 @@ import {
   X,
   Save,
   Upload,
-  Image as ImageIcon,
   Link as LinkIcon,
 } from 'lucide-react';
 import {
@@ -27,8 +25,6 @@ import {
   doc,
   serverTimestamp,
   orderBy,
-  where,
-  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,11 +33,11 @@ import toast from 'react-hot-toast';
 import { uploadImage, deleteImage, UploadProgress } from '@/lib/image-upload';
 import AdminLayout from '@/components/AdminLayout';
 import ConfirmModal from '@/components/ConfirmModal';
-import { staggerContainer, staggerItem, fadeInUp, scaleIn } from '@/lib/animations';
+import { staggerContainer, staggerItem, fadeInUp } from '@/lib/animations';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { isAdmin, signOut } = useAuth();
+  const { isAdmin } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
