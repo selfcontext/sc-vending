@@ -10,6 +10,10 @@
 node_modules/
 package-lock.json
 
+# Build outputs
+client-app/dist/
+firebase/functions/lib/
+
 
 
 # Flutter repo-specific
