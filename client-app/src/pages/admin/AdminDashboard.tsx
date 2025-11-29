@@ -710,11 +710,17 @@ function ProductFormModal({
                 <input
                   type="number"
                   value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 0;
+                    setFormData({ ...formData, price: Math.max(0, Math.min(value, 999999)) });
+                  }}
                   required
                   min="0"
+                  max="999999"
+                  step="1"
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
                 />
+                <p className="text-xs text-gray-500 mt-1">Max: $9,999.99</p>
               </div>
 
               <div>
@@ -722,11 +728,17 @@ function ProductFormModal({
                 <input
                   type="number"
                   value={formData.slot}
-                  onChange={(e) => setFormData({ ...formData, slot: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 1;
+                    setFormData({ ...formData, slot: Math.max(1, Math.min(value, 99)) });
+                  }}
                   required
                   min="1"
+                  max="99"
+                  step="1"
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
                 />
+                <p className="text-xs text-gray-500 mt-1">Slot 1-99</p>
               </div>
 
               <div>
@@ -734,11 +746,17 @@ function ProductFormModal({
                 <input
                   type="number"
                   value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 0;
+                    setFormData({ ...formData, quantity: Math.max(0, Math.min(value, 999)) });
+                  }}
                   required
                   min="0"
+                  max="999"
+                  step="1"
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
                 />
+                <p className="text-xs text-gray-500 mt-1">Max: 999</p>
               </div>
             </div>
 

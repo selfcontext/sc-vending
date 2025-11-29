@@ -42,12 +42,24 @@ class DispensedItem {
   });
 
   factory DispensedItem.fromMap(Map<String, dynamic> map) {
+    // Safe timestamp parsing with fallback to current time
+    DateTime timestamp;
+    final timestampData = map['timestamp'];
+    if (timestampData is Timestamp) {
+      timestamp = timestampData.toDate();
+    } else if (timestampData != null) {
+      // Handle other possible formats
+      timestamp = DateTime.now();
+    } else {
+      timestamp = DateTime.now();
+    }
+
     return DispensedItem(
       productId: map['productId'] ?? '',
       slot: map['slot'] ?? 0,
       status: map['status'] ?? 'pending',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
-      retryCount: map['retryCount'],
+      timestamp: timestamp,
+      retryCount: map['retryCount'] as int?,
     );
   }
 }
@@ -81,32 +93,47 @@ class VendingSession {
     this.extendedCount = 0,
   });
 
+  /// Helper function to safely parse Timestamp fields
+  static DateTime? _parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    return null;
+  }
+
+  /// Helper function to safely parse required Timestamp fields with fallback
+  static DateTime _parseRequiredTimestamp(dynamic value, DateTime fallback) {
+    if (value is Timestamp) return value.toDate();
+    return fallback;
+  }
+
   factory VendingSession.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>?;
+
+    if (data == null) {
+      throw FormatException('Document data is null for session ${doc.id}');
+    }
+
+    final now = DateTime.now();
 
     return VendingSession(
       id: doc.id,
-      vendingMachineId: data['vendingMachineId'] ?? '',
-      status: data['status'] ?? 'active',
+      vendingMachineId: data['vendingMachineId'] as String? ?? '',
+      status: data['status'] as String? ?? 'active',
       basket: (data['basket'] as List<dynamic>?)
               ?.map((item) => BasketItem.fromMap(item as Map<String, dynamic>))
               .toList() ??
           [],
-      totalAmount: data['totalAmount'] ?? 0,
+      totalAmount: data['totalAmount'] as int? ?? 0,
       dispensedItems: (data['dispensedItems'] as List<dynamic>?)
               ?.map((item) => DispensedItem.fromMap(item as Map<String, dynamic>))
               .toList() ??
           [],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      expiresAt: (data['expiresAt'] as Timestamp).toDate(),
-      completedAt: data['completedAt'] != null
-          ? (data['completedAt'] as Timestamp).toDate()
-          : null,
-      updatedAt: data['updatedAt'] != null
-          ? (data['updatedAt'] as Timestamp).toDate()
-          : null,
-      qrCodeData: data['qrCodeData'] ?? '',
-      extendedCount: data['extendedCount'] ?? 0,
+      createdAt: _parseRequiredTimestamp(data['createdAt'], now),
+      expiresAt: _parseRequiredTimestamp(data['expiresAt'], now.add(const Duration(minutes: 3))),
+      completedAt: _parseTimestamp(data['completedAt']),
+      updatedAt: _parseTimestamp(data['updatedAt']),
+      qrCodeData: data['qrCodeData'] as String? ?? '',
+      extendedCount: data['extendedCount'] as int? ?? 0,
     );
   }
 

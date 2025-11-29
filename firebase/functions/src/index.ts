@@ -173,6 +173,29 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       );
     }
 
+    // VALIDATION: Check inventory stock for all items before processing payment
+    for (const item of session.basket) {
+      const inventoryQuery = await db.collection('inventory')
+        .where('slot', '==', item.slot)
+        .limit(1)
+        .get();
+
+      if (inventoryQuery.empty) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Product in slot ${item.slot} not found in inventory`
+        );
+      }
+
+      const inventoryData = inventoryQuery.docs[0].data();
+      if (inventoryData.quantity < item.quantity) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Insufficient stock for ${item.productName}: requested ${item.quantity}, available ${inventoryData.quantity}`
+        );
+      }
+    }
+
     // Use batch to atomically create all events (prevents partial event creation on crash)
     const batch = db.batch();
 
@@ -252,6 +275,15 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
   }
 
   try {
+    // IDEMPOTENCY: Check if event was already processed to prevent duplicate processing
+    if (eventId) {
+      const eventDoc = await db.collection('events').doc(eventId).get();
+      if (eventDoc.exists && eventDoc.data()?.processed === true) {
+        console.log(`Event ${eventId} already processed, skipping`);
+        return { success: true, alreadyProcessed: true };
+      }
+    }
+
     const sessionRef = db.collection('sessions').doc(sessionId);
     const sessionDoc = await sessionRef.get();
 
@@ -269,17 +301,22 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
       timestamp: now,
     };
 
+    // Use batch to ensure atomic operations
+    const batch = db.batch();
+
     // Update session with dispensed item
-    await sessionRef.update({
+    batch.update(sessionRef, {
       dispensedItems: admin.firestore.FieldValue.arrayUnion(dispensedItem),
     });
 
     // Mark event as processed
     if (eventId) {
-      await db.collection('events').doc(eventId).update({
+      batch.update(db.collection('events').doc(eventId), {
         processed: true,
       });
     }
+
+    await batch.commit();
 
     // Create success/failed event
     await db.collection('events').add({
@@ -293,8 +330,17 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
 
     // If dispense failed, create a RefundRequested event for audit trail and refund processing
     if (!success) {
-      const basketItem = session.basket.find((item: any) => item.productId === productId);
-      const refundAmount = basketItem?.price || 0;
+      const basketItem = session.basket.find((item: { productId: string; productName: string; price: number; slot: number; quantity: number }) => item.productId === productId);
+
+      if (!basketItem) {
+        console.error(`Product ${productId} not found in basket for session ${sessionId}`);
+        throw new functions.https.HttpsError(
+          'not-found',
+          `Product ${productId} not found in session basket`
+        );
+      }
+
+      const refundAmount = basketItem.price;
 
       await db.collection('events').add({
         type: 'RefundRequested',
@@ -302,7 +348,7 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
         vendingMachineId: session.vendingMachineId,
         payload: {
           productId,
-          productName: basketItem?.productName || 'Unknown',
+          productName: basketItem.productName,
           slot,
           refundAmount,
           reason: 'dispense_failed',
@@ -318,7 +364,7 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
         vendingMachineId: session.vendingMachineId,
         details: {
           productId,
-          productName: basketItem?.productName || 'Unknown',
+          productName: basketItem.productName,
           refundAmount,
           reason: 'dispense_failed',
         },
@@ -335,22 +381,30 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
 
       if (!inventoryQuery.empty) {
         const inventoryDoc = inventoryQuery.docs[0];
-        await inventoryDoc.ref.update({
-          quantity: admin.firestore.FieldValue.increment(-1),
-          updatedAt: now,
-        });
+        const currentQuantity = inventoryDoc.data().quantity;
 
-        // Check if stock is low
-        const newQuantity = inventoryDoc.data().quantity - 1;
-        if (newQuantity <= 5 && newQuantity > 0) {
-          await db.collection('events').add({
-            type: 'StockLow',
-            sessionId,
-            vendingMachineId: session.vendingMachineId,
-            payload: { productId: inventoryDoc.id, quantity: newQuantity },
-            timestamp: now,
-            processed: false,
+        // VALIDATION: Ensure inventory doesn't go negative
+        if (currentQuantity <= 0) {
+          console.error(`Inventory for slot ${slot} already at 0, cannot decrement`);
+          // Don't throw error since dispense was successful, just log warning
+        } else {
+          await inventoryDoc.ref.update({
+            quantity: admin.firestore.FieldValue.increment(-1),
+            updatedAt: now,
           });
+
+          // Check if stock is low
+          const newQuantity = currentQuantity - 1;
+          if (newQuantity <= 5 && newQuantity > 0) {
+            await db.collection('events').add({
+              type: 'StockLow',
+              sessionId,
+              vendingMachineId: session.vendingMachineId,
+              payload: { productId: inventoryDoc.id, quantity: newQuantity },
+              timestamp: now,
+              processed: false,
+            });
+          }
         }
       }
     }

@@ -112,10 +112,35 @@ export function SessionProvider({ sessionId, children }: SessionProviderProps) {
     }
   }, [sessionId]);
 
-  const refreshSession = useCallback(() => {
-    // Force a re-fetch by toggling a state
-    // The listener will automatically update
-  }, []);
+  const refreshSession = useCallback(async () => {
+    if (!sessionId) return;
+
+    try {
+      // Force a re-read of the session document
+      const sessionRef = doc(db, 'sessions', sessionId);
+      const snapshot = await (await import('firebase/firestore')).getDoc(sessionRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setSession({
+          id: snapshot.id,
+          ...data,
+          createdAt: data.createdAt?.toDate(),
+          expiresAt: data.expiresAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate(),
+        } as Session);
+        sessionExistsRef.current = true;
+        setError(null);
+      } else {
+        setSession(null);
+        sessionExistsRef.current = false;
+        setError(new Error('Session not found'));
+      }
+    } catch (err) {
+      console.error('Failed to refresh session:', err);
+      setError(err as Error);
+    }
+  }, [sessionId]);
 
   const value: SessionContextValue = {
     session,

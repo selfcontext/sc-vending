@@ -42,7 +42,7 @@ export default function ShoppingPage() {
           } as Session);
 
           // Check if session has been paid (with navigation guard to prevent multiple triggers)
-          if ((data.status === 'completed' || data.payments?.some((p: any) => p.status === 'completed')) && !hasNavigatedRef.current) {
+          if ((data.status === 'completed' || data.payments?.some((p: { status: string }) => p.status === 'completed')) && !hasNavigatedRef.current) {
             hasNavigatedRef.current = true;
             navigate(`/dispensing/${sessionId}`);
           }
@@ -90,6 +90,18 @@ export default function ShoppingPage() {
   const addToBasket = async (product: Product, quantity: number = 1) => {
     if (!sessionId || !session) return;
 
+    // VALIDATION: Check if session is expired before allowing add to basket
+    if (session.expiresAt && new Date() > session.expiresAt) {
+      toast.error('Session has expired. Please start a new session.');
+      return;
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      toast.error('Session is no longer active.');
+      return;
+    }
+
     try {
       const existingItem = session.basket.find((item) => item.productId === product.id);
       let newBasket: BasketItem[];
@@ -130,6 +142,18 @@ export default function ShoppingPage() {
 
   const updateQuantity = async (productId: string, delta: number) => {
     if (!sessionId || !session) return;
+
+    // VALIDATION: Check if session is expired
+    if (session.expiresAt && new Date() > session.expiresAt) {
+      toast.error('Session has expired. Please start a new session.');
+      return;
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      toast.error('Session is no longer active.');
+      return;
+    }
 
     try {
       const newBasket = session.basket

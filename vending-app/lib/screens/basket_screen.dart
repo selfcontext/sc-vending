@@ -17,10 +17,13 @@ class BasketScreen extends StatefulWidget {
 class _BasketScreenState extends State<BasketScreen> {
   VendingSession? _session;
   StreamSubscription<VendingSession?>? _sessionSubscription;
+  bool _hasNavigatedToDispensing = false; // Prevent multiple navigations
 
   @override
   void initState() {
     super.initState();
+    // Set current session ID in Firebase service
+    FirebaseService.setCurrentSessionId(widget.sessionId);
     _listenToSession();
   }
 
@@ -37,8 +40,9 @@ class _BasketScreenState extends State<BasketScreen> {
 
         setState(() => _session = session);
 
-        // Navigate to dispensing screen when payment is completed
-        if (session.hasPayment && session.status == 'completed') {
+        // Navigate to dispensing screen when payment is completed (with guard)
+        if (session.hasPayment && session.status == 'completed' && !_hasNavigatedToDispensing) {
+          _hasNavigatedToDispensing = true; // Prevent duplicate navigations
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => DispensingScreen(sessionId: widget.sessionId),

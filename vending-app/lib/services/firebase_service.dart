@@ -3,29 +3,78 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/session.dart';
 import '../models/vending_event.dart';
 
+/// Custom exception for Firebase service errors with context
+class FirebaseServiceException implements Exception {
+  final String message;
+  final String? code;
+  final dynamic originalError;
+
+  FirebaseServiceException(this.message, {this.code, this.originalError});
+
+  @override
+  String toString() => 'FirebaseServiceException: $message${code != null ? ' (code: $code)' : ''}';
+}
+
 class FirebaseService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
-  static const String vendingMachineId = 'machine_001'; // TODO: Make this configurable
+  // Configurable machine ID - can be set from environment or config
+  static String _vendingMachineId = 'machine_001';
+
+  /// Get the current vending machine ID
+  static String get vendingMachineId => _vendingMachineId;
+
+  /// Configure the vending machine ID (call this at app startup)
+  static void setVendingMachineId(String machineId) {
+    if (machineId.isEmpty) {
+      throw FirebaseServiceException('Machine ID cannot be empty', code: 'invalid-argument');
+    }
+    _vendingMachineId = machineId;
+  }
+
+  // Track current session ID for event filtering
+  static String? _currentSessionId;
+
+  /// Set the current session ID for event filtering
+  static void setCurrentSessionId(String? sessionId) {
+    _currentSessionId = sessionId;
+  }
+
+  /// Get the current session ID
+  static String? get currentSessionId => _currentSessionId;
 
   /// Create a new session
   static Future<VendingSession?> createSession() async {
     try {
       final result = await _functions.httpsCallable('createSession').call({
-        'vendingMachineId': vendingMachineId,
+        'vendingMachineId': _vendingMachineId,
       });
 
-      final sessionId = result.data['sessionId'];
+      final sessionId = result.data['sessionId'] as String?;
+      if (sessionId == null) {
+        throw FirebaseServiceException('No session ID returned from server', code: 'invalid-response');
+      }
+
+      // Set the current session ID for event filtering
+      _currentSessionId = sessionId;
+
       final sessionDoc = await _firestore.collection('sessions').doc(sessionId).get();
 
       if (sessionDoc.exists) {
         return VendingSession.fromFirestore(sessionDoc);
       }
-      return null;
+
+      throw FirebaseServiceException('Session document not found after creation', code: 'not-found');
+    } on FirebaseFunctionsException catch (e) {
+      throw FirebaseServiceException(
+        'Failed to create session: ${e.message}',
+        code: e.code,
+        originalError: e,
+      );
     } catch (e) {
-      print('Error creating session: $e');
-      return null;
+      if (e is FirebaseServiceException) rethrow;
+      throw FirebaseServiceException('Error creating session', originalError: e);
     }
   }
 
@@ -43,12 +92,23 @@ class FirebaseService {
     });
   }
 
-  /// Listen to unprocessed events for this machine
-  static Stream<List<VendingEvent>> watchEvents() {
-    return _firestore
+  /// Listen to unprocessed events for this machine and current session
+  /// Optionally filter by sessionId to prevent cross-session event leakage
+  static Stream<List<VendingEvent>> watchEvents({String? sessionId}) {
+    // Use provided sessionId or fall back to current session
+    final filterSessionId = sessionId ?? _currentSessionId;
+
+    var query = _firestore
         .collection('events')
-        .where('vendingMachineId', isEqualTo: vendingMachineId)
-        .where('processed', isEqualTo: false)
+        .where('vendingMachineId', isEqualTo: _vendingMachineId)
+        .where('processed', isEqualTo: false);
+
+    // Filter by sessionId if available to prevent cross-session interference
+    if (filterSessionId != null) {
+      query = query.where('sessionId', isEqualTo: filterSessionId);
+    }
+
+    return query
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
@@ -65,7 +125,7 @@ class FirebaseService {
     });
   }
 
-  /// Confirm product dispense
+  /// Confirm product dispense with proper error handling
   static Future<void> confirmDispense({
     required String sessionId,
     required String productId,
@@ -81,9 +141,14 @@ class FirebaseService {
         'success': success,
         'eventId': eventId,
       });
+    } on FirebaseFunctionsException catch (e) {
+      throw FirebaseServiceException(
+        'Failed to confirm dispense: ${e.message}',
+        code: e.code,
+        originalError: e,
+      );
     } catch (e) {
-      print('Error confirming dispense: $e');
-      rethrow;
+      throw FirebaseServiceException('Error confirming dispense', originalError: e);
     }
   }
 
@@ -91,10 +156,18 @@ class FirebaseService {
   static Future<void> updateHeartbeat() async {
     try {
       await _functions.httpsCallable('updateHeartbeat').call({
-        'vendingMachineId': vendingMachineId,
+        'vendingMachineId': _vendingMachineId,
       });
+    } on FirebaseFunctionsException catch (e) {
+      // Log but don't throw - heartbeat failures shouldn't crash the app
+      print('Error updating heartbeat: ${e.message} (code: ${e.code})');
     } catch (e) {
       print('Error updating heartbeat: $e');
     }
+  }
+
+  /// Clear the current session (call when session ends)
+  static void clearCurrentSession() {
+    _currentSessionId = null;
   }
 }

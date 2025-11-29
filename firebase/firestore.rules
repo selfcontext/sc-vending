@@ -11,28 +11,29 @@ service cloud.firestore {
       return isAuthenticated() && !request.auth.token.firebase.sign_in_provider.matches('anonymous');
     }
 
-    // Config collection - read only for all, write for admin
+    // Config collection - read for authenticated users (including anonymous), write for admin
+    // Anonymous auth is used for customer sessions
     match /config/{document=**} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
-    // Inventory collection - read for all, write for admin only
+    // Inventory collection - read for authenticated users, write for admin only
     match /inventory/{productId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create, update, delete: if isAdmin();
     }
 
-    // Vending machines collection - read for all, write for admin
+    // Vending machines collection - read for authenticated, write for admin
     match /vendingMachines/{machineId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow create, update, delete: if isAdmin();
     }
 
-    // Sessions collection - read by session ID, write with restrictions
+    // Sessions collection - read/write with restrictions
     match /sessions/{sessionId} {
-      // Anyone can read a specific session
-      allow read: if true;
+      // Only authenticated users can read sessions (prevents enumeration)
+      allow read: if isAuthenticated();
 
       // Only functions can create sessions
       allow create: if false;

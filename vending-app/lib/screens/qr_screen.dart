@@ -52,23 +52,49 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
   }
 
   Future<void> _createSession() async {
+    // Cancel any existing subscription before creating new session
+    _sessionSubscription?.cancel();
+    _sessionSubscription = null;
+
+    // Reset navigation guard for new session
+    _hasNavigated = false;
+
+    // Clear any existing session in the service
+    FirebaseService.clearCurrentSession();
+
     setState(() => _loading = true);
 
-    final session = await FirebaseService.createSession();
+    try {
+      final session = await FirebaseService.createSession();
 
-    if (session != null && mounted) {
-      setState(() {
-        _session = session;
-        _loading = false;
-      });
+      if (session != null && mounted) {
+        setState(() {
+          _session = session;
+          _loading = false;
+        });
 
-      // Start listening to session changes
-      _listenToSession(session.id);
-    } else {
+        // Start listening to session changes
+        _listenToSession(session.id);
+      } else {
+        setState(() => _loading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create session')),
+          );
+        }
+      }
+    } on FirebaseServiceException catch (e) {
       setState(() => _loading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create session')),
+          SnackBar(content: Text('Error: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unexpected error: $e')),
         );
       }
     }

@@ -22,17 +22,30 @@ class VendingEvent {
   });
 
   factory VendingEvent.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>?;
+
+    if (data == null) {
+      throw FormatException('Document data is null for event ${doc.id}');
+    }
+
+    // Safe timestamp parsing with fallback
+    DateTime timestamp;
+    final timestampData = data['timestamp'];
+    if (timestampData is Timestamp) {
+      timestamp = timestampData.toDate();
+    } else {
+      timestamp = DateTime.now();
+    }
 
     return VendingEvent(
       id: doc.id,
-      type: data['type'] ?? '',
-      sessionId: data['sessionId'] ?? '',
-      vendingMachineId: data['vendingMachineId'] ?? '',
+      type: data['type'] as String? ?? '',
+      sessionId: data['sessionId'] as String? ?? '',
+      vendingMachineId: data['vendingMachineId'] as String? ?? '',
       payload: data['payload'] as Map<String, dynamic>? ?? {},
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
-      sequenceNumber: data['sequenceNumber'] ?? 0,
-      processed: data['processed'] ?? false,
+      timestamp: timestamp,
+      sequenceNumber: data['sequenceNumber'] as int? ?? 0,
+      processed: data['processed'] as bool? ?? false,
     );
   }
 

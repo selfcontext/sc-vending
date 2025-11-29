@@ -50,6 +50,7 @@ export interface Session {
   createdAt: Date;
   expiresAt: Date;
   completedAt?: Date;
+  updatedAt?: Date;
   qrCodeData: string;
   extendedCount?: number; // Track how many times session has been extended
 }
@@ -64,14 +65,69 @@ export type EventType =
   | 'StockLow'
   | 'RefundRequested';
 
+// Payload types for different event types
+export interface ProductDispatchPayload {
+  productId: string;
+  productName: string;
+  slot: number;
+  price: number;
+}
+
+export interface PaymentReceivedPayload {
+  transactionId: string;
+  amount: number;
+}
+
+export interface RefundRequestedPayload {
+  productId: string;
+  productName: string;
+  slot: number;
+  refundAmount: number;
+  reason: string;
+}
+
+export interface StockLowPayload {
+  productId: string;
+  productName?: string;
+  quantity: number;
+  threshold?: number;
+}
+
+export interface SessionPayload {
+  sessionId: string;
+}
+
+export interface DispenseResultPayload {
+  productId: string;
+  slot: number;
+}
+
+export type EventPayload =
+  | ProductDispatchPayload
+  | PaymentReceivedPayload
+  | RefundRequestedPayload
+  | StockLowPayload
+  | SessionPayload
+  | DispenseResultPayload
+  | Record<string, unknown>;
+
 export interface VendingEvent {
   id: string;
   type: EventType;
   sessionId: string;
   vendingMachineId: string;
-  payload: any;
+  payload: EventPayload;
   timestamp: Date;
   processed: boolean;
+  sequenceNumber?: number;
+}
+
+export interface VendingMachineConfiguration {
+  sessionTimeout?: number; // in minutes
+  maxRetries?: number;
+  enableDropSensor?: boolean;
+  lowStockThreshold?: number;
+  maintenanceMode?: boolean;
 }
 
 export interface VendingMachine {
@@ -81,11 +137,7 @@ export interface VendingMachine {
   status: 'online' | 'offline' | 'maintenance';
   currentSessionId?: string;
   lastHeartbeat: Date;
-  configuration: {
-    sessionTimeout?: number; // in minutes
-    maxRetries?: number;
-    [key: string]: any;
-  };
+  configuration: VendingMachineConfiguration;
 }
 
 export interface AppConfig {
