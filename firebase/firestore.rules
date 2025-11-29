@@ -68,5 +68,13 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['processed']);
       allow delete: if isAdmin();
     }
+
+    // Transaction logs collection - admin read only, write by functions only
+    // Contains sensitive refund and transaction data
+    match /transactionLogs/{logId} {
+      allow read: if isAdmin();
+      // Only Cloud Functions can write to transaction logs
+      allow create, update, delete: if false;
+    }
   }
 }

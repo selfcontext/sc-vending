@@ -123,7 +123,7 @@ export const createSession = functions.https.onCall(async (data, context) => {
 export const processPayment = functions.https.onCall(async (data, context) => {
   const { sessionId, transactionId, amount } = data;
 
-  if (!sessionId || !transactionId || !amount) {
+  if (!sessionId || !transactionId || amount === undefined) {
     throw new functions.https.HttpsError(
       'invalid-argument',
       'sessionId, transactionId, and amount are required'
@@ -141,14 +141,50 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     const session = sessionDoc.data()!;
     const now = admin.firestore.Timestamp.now();
 
+    // VALIDATION: Check if session is already completed (prevent double payment)
+    if (session.status === 'completed') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Payment already processed for this session'
+      );
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Session is not active'
+      );
+    }
+
+    // VALIDATION: Check if basket is empty
+    if (!session.basket || session.basket.length === 0) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Cannot process payment for empty basket'
+      );
+    }
+
+    // VALIDATION: Verify amount matches session total
+    if (amount !== session.totalAmount) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Amount mismatch: expected ${session.totalAmount}, got ${amount}`
+      );
+    }
+
+    // Use batch to atomically create all events (prevents partial event creation on crash)
+    const batch = db.batch();
+
     // Update session with payment
-    await sessionRef.update({
+    batch.update(sessionRef, {
       status: 'completed',
       completedAt: now,
     });
 
     // Create PaymentReceived event
-    await db.collection('events').add({
+    const paymentEventRef = db.collection('events').doc();
+    batch.set(paymentEventRef, {
       type: 'PaymentReceived',
       sessionId,
       vendingMachineId: session.vendingMachineId,
@@ -162,7 +198,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     let sequenceNumber = 0;
     for (const item of session.basket) {
       for (let i = 0; i < item.quantity; i++) {
-        await db.collection('events').add({
+        const dispatchEventRef = db.collection('events').doc();
+        batch.set(dispatchEventRef, {
           type: 'ProductDispatch',
           sessionId,
           vendingMachineId: session.vendingMachineId,
@@ -179,9 +216,15 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       }
     }
 
+    // Commit all changes atomically
+    await batch.commit();
+
     return { success: true };
   } catch (error) {
     console.error('Error processing payment:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
     throw new functions.https.HttpsError('internal', 'Failed to process payment');
   }
 });
@@ -197,6 +240,14 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError(
       'invalid-argument',
       'sessionId, productId, and success are required'
+    );
+  }
+
+  // VALIDATION: Validate slot is a valid number within expected range (0-99 for typical vending machines)
+  if (slot === undefined || typeof slot !== 'number' || slot < 0 || slot > 99 || !Number.isInteger(slot)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Invalid slot number: must be an integer between 0 and 99'
     );
   }
 

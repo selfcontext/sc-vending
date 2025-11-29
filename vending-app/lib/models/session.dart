@@ -62,7 +62,9 @@ class VendingSession {
   final DateTime createdAt;
   final DateTime expiresAt;
   final DateTime? completedAt;
+  final DateTime? updatedAt;
   final String qrCodeData;
+  final int extendedCount;
 
   VendingSession({
     required this.id,
@@ -74,7 +76,9 @@ class VendingSession {
     required this.createdAt,
     required this.expiresAt,
     this.completedAt,
+    this.updatedAt,
     required this.qrCodeData,
+    this.extendedCount = 0,
   });
 
   factory VendingSession.fromFirestore(DocumentSnapshot doc) {
@@ -98,7 +102,11 @@ class VendingSession {
       completedAt: data['completedAt'] != null
           ? (data['completedAt'] as Timestamp).toDate()
           : null,
+      updatedAt: data['updatedAt'] != null
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
       qrCodeData: data['qrCodeData'] ?? '',
+      extendedCount: data['extendedCount'] ?? 0,
     );
   }
 

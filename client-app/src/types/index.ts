@@ -61,7 +61,8 @@ export type EventType =
   | 'SessionExpired'
   | 'DispenseSuccess'
   | 'DispenseFailed'
-  | 'StockLow';
+  | 'StockLow'
+  | 'RefundRequested';
 
 export interface VendingEvent {
   id: string;
@@ -96,10 +97,10 @@ export interface AppConfig {
 
 export interface TransactionLog {
   id: string;
-  type: 'session_created' | 'basket_updated' | 'payment_completed' | 'product_dispensed' | 'inventory_updated' | 'session_extended';
+  type: 'session_created' | 'basket_updated' | 'payment_completed' | 'product_dispensed' | 'inventory_updated' | 'session_extended' | 'refund_requested';
   userId?: string;
   sessionId?: string;
   vendingMachineId?: string;
-  details: any;
+  details: Record<string, unknown>;
   timestamp: Date;
 }
