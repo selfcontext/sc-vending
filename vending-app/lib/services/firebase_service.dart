@@ -93,20 +93,23 @@ class FirebaseService {
   }
 
   /// Listen to unprocessed events for this machine and current session
-  /// Optionally filter by sessionId to prevent cross-session event leakage
+  /// Requires sessionId to prevent cross-session event leakage
   static Stream<List<VendingEvent>> watchEvents({String? sessionId}) {
     // Use provided sessionId or fall back to current session
     final filterSessionId = sessionId ?? _currentSessionId;
 
-    var query = _firestore
+    // SECURITY: Require sessionId to prevent listening to all events
+    if (filterSessionId == null) {
+      throw FirebaseServiceException(
+        'Session ID required to watch events. Call setCurrentSession() first or provide sessionId parameter.',
+      );
+    }
+
+    final query = _firestore
         .collection('events')
         .where('vendingMachineId', isEqualTo: _vendingMachineId)
-        .where('processed', isEqualTo: false);
-
-    // Filter by sessionId if available to prevent cross-session interference
-    if (filterSessionId != null) {
-      query = query.where('sessionId', isEqualTo: filterSessionId);
-    }
+        .where('processed', isEqualTo: false)
+        .where('sessionId', isEqualTo: filterSessionId);
 
     return query
         .orderBy('timestamp', descending: false)

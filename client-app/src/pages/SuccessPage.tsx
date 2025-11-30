@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, CheckCircle, XCircle } from 'lucide-react';
+import { Heart, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Session } from '@/types';
@@ -11,30 +11,72 @@ import successAnimation from '@/assets/animations/success.json';
 export default function SuccessPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setError('No session ID provided');
+      setLoading(false);
+      return;
+    }
 
     const loadSession = async () => {
-      const sessionRef = doc(db, 'sessions', sessionId);
-      const snapshot = await getDoc(sessionRef);
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setSession({
-          id: snapshot.id,
-          ...data,
-          createdAt: data.createdAt?.toDate(),
-          expiresAt: data.expiresAt?.toDate(),
-          completedAt: data.completedAt?.toDate(),
-        } as Session);
+      try {
+        const sessionRef = doc(db, 'sessions', sessionId);
+        const snapshot = await getDoc(sessionRef);
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setSession({
+            id: snapshot.id,
+            ...data,
+            createdAt: data.createdAt?.toDate(),
+            expiresAt: data.expiresAt?.toDate(),
+            completedAt: data.completedAt?.toDate(),
+          } as Session);
+        } else {
+          setError('Session not found');
+        }
+      } catch (err) {
+        console.error('Failed to load session:', err);
+        setError('Failed to load session details');
+      } finally {
+        setLoading(false);
       }
     };
 
     loadSession();
   }, [sessionId]);
 
-  if (!session) {
-    return null;
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading your order details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="glass-strong rounded-3xl p-8 text-center max-w-md">
+          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-gray-600 mb-6">{error || 'Unable to load session'}</p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+          >
+            Return Home
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const failedItems = session.dispensedItems.filter((item) => item.status === 'failed');

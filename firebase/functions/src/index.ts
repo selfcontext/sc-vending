@@ -372,7 +372,7 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
       });
     }
 
-    // Update inventory
+    // Update inventory atomically using transaction
     if (success) {
       const inventoryQuery = await db.collection('inventory')
         .where('slot', '==', slot)
@@ -381,30 +381,48 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
 
       if (!inventoryQuery.empty) {
         const inventoryDoc = inventoryQuery.docs[0];
-        const currentQuantity = inventoryDoc.data().quantity;
 
-        // VALIDATION: Ensure inventory doesn't go negative
-        if (currentQuantity <= 0) {
-          console.error(`Inventory for slot ${slot} already at 0, cannot decrement`);
-          // Don't throw error since dispense was successful, just log warning
-        } else {
-          await inventoryDoc.ref.update({
-            quantity: admin.firestore.FieldValue.increment(-1),
+        // Use transaction to atomically check and decrement inventory
+        await db.runTransaction(async (transaction) => {
+          const freshDoc = await transaction.get(inventoryDoc.ref);
+          if (!freshDoc.exists) {
+            console.error(`Inventory document for slot ${slot} no longer exists`);
+            return;
+          }
+
+          const currentQuantity = freshDoc.data()?.quantity ?? 0;
+
+          // VALIDATION: Ensure inventory doesn't go negative
+          if (currentQuantity <= 0) {
+            console.error(`Inventory for slot ${slot} already at 0, cannot decrement`);
+            return;
+          }
+
+          const newQuantity = currentQuantity - 1;
+          transaction.update(inventoryDoc.ref, {
+            quantity: newQuantity,
             updatedAt: now,
           });
 
-          // Check if stock is low
-          const newQuantity = currentQuantity - 1;
+          // Check if stock is low (handled after transaction)
           if (newQuantity <= 5 && newQuantity > 0) {
-            await db.collection('events').add({
-              type: 'StockLow',
-              sessionId,
-              vendingMachineId: session.vendingMachineId,
-              payload: { productId: inventoryDoc.id, quantity: newQuantity },
-              timestamp: now,
-              processed: false,
-            });
+            // Note: We can't add to a different collection in transaction
+            // So we'll handle low stock alert after transaction
           }
+        });
+
+        // Check for low stock alert outside transaction
+        const updatedDoc = await inventoryDoc.ref.get();
+        const newQuantity = updatedDoc.data()?.quantity ?? 0;
+        if (newQuantity <= 5 && newQuantity > 0) {
+          await db.collection('events').add({
+            type: 'StockLow',
+            sessionId,
+            vendingMachineId: session.vendingMachineId,
+            payload: { productId: inventoryDoc.id, quantity: newQuantity },
+            timestamp: now,
+            processed: false,
+          });
         }
       }
     }
