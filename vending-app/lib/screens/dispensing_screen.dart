@@ -20,14 +20,19 @@ class _DispensingScreenState extends State<DispensingScreen> {
   VendingSession? _session;
   final List<VendingEvent> _pendingEvents = [];
   final Map<String, int> _retryCount = {};
+  final Map<String, int> _errorRetryCount = {}; // Track error retries separately
   bool _isProcessing = false;
+  bool _hasNavigatedToCompletion = false; // Prevent multiple navigations
   static const int maxRetries = 2;
+  static const int maxErrorRetries = 3; // Prevent infinite loop on errors
   StreamSubscription<VendingSession?>? _sessionSubscription;
   StreamSubscription<List<VendingEvent>>? _eventsSubscription;
 
   @override
   void initState() {
     super.initState();
+    // Set current session ID for event filtering
+    FirebaseService.setCurrentSessionId(widget.sessionId);
     _listenToSession();
     _listenToEvents();
   }
@@ -46,8 +51,9 @@ class _DispensingScreenState extends State<DispensingScreen> {
 
         setState(() => _session = session);
 
-        // Check if all items are dispensed or failed
-        if (_isComplete(session)) {
+        // Check if all items are dispensed or failed (with navigation guard)
+        if (_isComplete(session) && !_hasNavigatedToCompletion) {
+          _hasNavigatedToCompletion = true; // Prevent multiple navigations
           Timer(const Duration(seconds: 2), () {
             if (mounted) {
               Navigator.of(context).pushReplacement(
@@ -69,11 +75,15 @@ class _DispensingScreenState extends State<DispensingScreen> {
   }
 
   void _listenToEvents() {
-    _eventsSubscription = FirebaseService.watchEvents().listen(
+    // Pass sessionId to filter events for this session only
+    _eventsSubscription = FirebaseService.watchEvents(sessionId: widget.sessionId).listen(
       (events) {
         if (!mounted) return;
 
-        final productDispatchEvents = events.where((e) => e.isProductDispatch).toList();
+        // Double-check sessionId filter client-side as safety measure
+        final productDispatchEvents = events
+            .where((e) => e.isProductDispatch && e.sessionId == widget.sessionId)
+            .toList();
 
         setState(() {
           _pendingEvents.clear();
@@ -169,9 +179,44 @@ class _DispensingScreenState extends State<DispensingScreen> {
       print('Error processing event: $e');
       _isProcessing = false;
 
-      // Retry after error
-      await Future.delayed(const Duration(seconds: 2));
-      _processNextEvent();
+      // Track error retries to prevent infinite loop
+      final event = _pendingEvents.isNotEmpty ? _pendingEvents.first : null;
+      if (event != null) {
+        final errorKey = 'error_${event.id}';
+        final errorRetries = _errorRetryCount[errorKey] ?? 0;
+
+        if (errorRetries < maxErrorRetries) {
+          _errorRetryCount[errorKey] = errorRetries + 1;
+          print('Retrying after error... (${errorRetries + 1}/$maxErrorRetries)');
+
+          // Retry after error with exponential backoff
+          await Future.delayed(Duration(seconds: 2 * (errorRetries + 1)));
+          _processNextEvent();
+        } else {
+          // Max error retries reached - skip this event to prevent infinite loop
+          print('Max error retries reached for event ${event.id}, skipping');
+          setState(() {
+            _pendingEvents.removeWhere((e) => e.id == event.id);
+            _errorRetryCount.remove(errorKey);
+          });
+
+          // Try to confirm as failed so server knows
+          try {
+            await FirebaseService.confirmDispense(
+              sessionId: widget.sessionId,
+              productId: event.payload['productId'] as String? ?? '',
+              slot: event.payload['slot'] as int? ?? 0,
+              success: false,
+              eventId: event.id,
+            );
+          } catch (_) {
+            // Ignore confirmation errors at this point
+          }
+
+          // Continue with next event
+          _processNextEvent();
+        }
+      }
     }
   }
 
@@ -363,9 +408,11 @@ class _DispensingScreenState extends State<DispensingScreen> {
   }
 
   Widget _buildItemStatus(BasketItem basketItem, ThemeData theme) {
+    // Filter and sort by timestamp to ensure correct ordering regardless of processing order
     final itemDispenses = _session!.dispensedItems
         .where((di) => di.productId == basketItem.productId)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

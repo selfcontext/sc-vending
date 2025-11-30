@@ -123,7 +123,7 @@ export const createSession = functions.https.onCall(async (data, context) => {
 export const processPayment = functions.https.onCall(async (data, context) => {
   const { sessionId, transactionId, amount } = data;
 
-  if (!sessionId || !transactionId || !amount) {
+  if (!sessionId || !transactionId || amount === undefined) {
     throw new functions.https.HttpsError(
       'invalid-argument',
       'sessionId, transactionId, and amount are required'
@@ -141,14 +141,73 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     const session = sessionDoc.data()!;
     const now = admin.firestore.Timestamp.now();
 
+    // VALIDATION: Check if session is already completed (prevent double payment)
+    if (session.status === 'completed') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Payment already processed for this session'
+      );
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Session is not active'
+      );
+    }
+
+    // VALIDATION: Check if basket is empty
+    if (!session.basket || session.basket.length === 0) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Cannot process payment for empty basket'
+      );
+    }
+
+    // VALIDATION: Verify amount matches session total
+    if (amount !== session.totalAmount) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Amount mismatch: expected ${session.totalAmount}, got ${amount}`
+      );
+    }
+
+    // VALIDATION: Check inventory stock for all items before processing payment
+    for (const item of session.basket) {
+      const inventoryQuery = await db.collection('inventory')
+        .where('slot', '==', item.slot)
+        .limit(1)
+        .get();
+
+      if (inventoryQuery.empty) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Product in slot ${item.slot} not found in inventory`
+        );
+      }
+
+      const inventoryData = inventoryQuery.docs[0].data();
+      if (inventoryData.quantity < item.quantity) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Insufficient stock for ${item.productName}: requested ${item.quantity}, available ${inventoryData.quantity}`
+        );
+      }
+    }
+
+    // Use batch to atomically create all events (prevents partial event creation on crash)
+    const batch = db.batch();
+
     // Update session with payment
-    await sessionRef.update({
+    batch.update(sessionRef, {
       status: 'completed',
       completedAt: now,
     });
 
     // Create PaymentReceived event
-    await db.collection('events').add({
+    const paymentEventRef = db.collection('events').doc();
+    batch.set(paymentEventRef, {
       type: 'PaymentReceived',
       sessionId,
       vendingMachineId: session.vendingMachineId,
@@ -158,9 +217,12 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     });
 
     // Create ProductDispatch events for each item in basket
+    // Use sequenceNumber to ensure deterministic ordering even with same timestamp
+    let sequenceNumber = 0;
     for (const item of session.basket) {
       for (let i = 0; i < item.quantity; i++) {
-        await db.collection('events').add({
+        const dispatchEventRef = db.collection('events').doc();
+        batch.set(dispatchEventRef, {
           type: 'ProductDispatch',
           sessionId,
           vendingMachineId: session.vendingMachineId,
@@ -171,14 +233,21 @@ export const processPayment = functions.https.onCall(async (data, context) => {
             price: item.price,
           },
           timestamp: now,
+          sequenceNumber: sequenceNumber++,
           processed: false,
         });
       }
     }
 
+    // Commit all changes atomically
+    await batch.commit();
+
     return { success: true };
   } catch (error) {
     console.error('Error processing payment:', error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
     throw new functions.https.HttpsError('internal', 'Failed to process payment');
   }
 });
@@ -197,8 +266,32 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
     );
   }
 
+  // VALIDATION: Validate slot is a valid number within expected range (0-99 for typical vending machines)
+  if (slot === undefined || typeof slot !== 'number' || slot < 0 || slot > 99 || !Number.isInteger(slot)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Invalid slot number: must be an integer between 0 and 99'
+    );
+  }
+
   try {
+    // IDEMPOTENCY: Check if event was already processed to prevent duplicate processing
+    if (eventId) {
+      const eventDoc = await db.collection('events').doc(eventId).get();
+      if (eventDoc.exists && eventDoc.data()?.processed === true) {
+        console.log(`Event ${eventId} already processed, skipping`);
+        return { success: true, alreadyProcessed: true };
+      }
+    }
+
     const sessionRef = db.collection('sessions').doc(sessionId);
+    const sessionDoc = await sessionRef.get();
+
+    if (!sessionDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Session not found');
+    }
+
+    const session = sessionDoc.data()!;
     const now = admin.firestore.Timestamp.now();
 
     const dispensedItem = {
@@ -208,29 +301,78 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
       timestamp: now,
     };
 
+    // Use batch to ensure atomic operations
+    const batch = db.batch();
+
     // Update session with dispensed item
-    await sessionRef.update({
+    batch.update(sessionRef, {
       dispensedItems: admin.firestore.FieldValue.arrayUnion(dispensedItem),
     });
 
     // Mark event as processed
     if (eventId) {
-      await db.collection('events').doc(eventId).update({
+      batch.update(db.collection('events').doc(eventId), {
         processed: true,
       });
     }
+
+    await batch.commit();
 
     // Create success/failed event
     await db.collection('events').add({
       type: success ? 'DispenseSuccess' : 'DispenseFailed',
       sessionId,
-      vendingMachineId: (await sessionRef.get()).data()!.vendingMachineId,
+      vendingMachineId: session.vendingMachineId,
       payload: { productId, slot },
       timestamp: now,
       processed: false,
     });
 
-    // Update inventory
+    // If dispense failed, create a RefundRequested event for audit trail and refund processing
+    if (!success) {
+      const basketItem = session.basket.find((item: { productId: string; productName: string; price: number; slot: number; quantity: number }) => item.productId === productId);
+
+      if (!basketItem) {
+        console.error(`Product ${productId} not found in basket for session ${sessionId}`);
+        throw new functions.https.HttpsError(
+          'not-found',
+          `Product ${productId} not found in session basket`
+        );
+      }
+
+      const refundAmount = basketItem.price;
+
+      await db.collection('events').add({
+        type: 'RefundRequested',
+        sessionId,
+        vendingMachineId: session.vendingMachineId,
+        payload: {
+          productId,
+          productName: basketItem.productName,
+          slot,
+          refundAmount,
+          reason: 'dispense_failed',
+        },
+        timestamp: now,
+        processed: false,
+      });
+
+      // Log the refund request for processing
+      await db.collection('transactionLogs').add({
+        type: 'refund_requested',
+        sessionId,
+        vendingMachineId: session.vendingMachineId,
+        details: {
+          productId,
+          productName: basketItem.productName,
+          refundAmount,
+          reason: 'dispense_failed',
+        },
+        timestamp: now,
+      });
+    }
+
+    // Update inventory atomically using transaction
     if (success) {
       const inventoryQuery = await db.collection('inventory')
         .where('slot', '==', slot)
@@ -239,18 +381,44 @@ export const confirmDispense = functions.https.onCall(async (data, context) => {
 
       if (!inventoryQuery.empty) {
         const inventoryDoc = inventoryQuery.docs[0];
-        await inventoryDoc.ref.update({
-          quantity: admin.firestore.FieldValue.increment(-1),
-          updatedAt: now,
+
+        // Use transaction to atomically check and decrement inventory
+        await db.runTransaction(async (transaction) => {
+          const freshDoc = await transaction.get(inventoryDoc.ref);
+          if (!freshDoc.exists) {
+            console.error(`Inventory document for slot ${slot} no longer exists`);
+            return;
+          }
+
+          const currentQuantity = freshDoc.data()?.quantity ?? 0;
+
+          // VALIDATION: Ensure inventory doesn't go negative
+          if (currentQuantity <= 0) {
+            console.error(`Inventory for slot ${slot} already at 0, cannot decrement`);
+            return;
+          }
+
+          const newQuantity = currentQuantity - 1;
+          transaction.update(inventoryDoc.ref, {
+            quantity: newQuantity,
+            updatedAt: now,
+          });
+
+          // Check if stock is low (handled after transaction)
+          if (newQuantity <= 5 && newQuantity > 0) {
+            // Note: We can't add to a different collection in transaction
+            // So we'll handle low stock alert after transaction
+          }
         });
 
-        // Check if stock is low
-        const newQuantity = inventoryDoc.data().quantity - 1;
+        // Check for low stock alert outside transaction
+        const updatedDoc = await inventoryDoc.ref.get();
+        const newQuantity = updatedDoc.data()?.quantity ?? 0;
         if (newQuantity <= 5 && newQuantity > 0) {
           await db.collection('events').add({
             type: 'StockLow',
             sessionId,
-            vendingMachineId: (await sessionRef.get()).data()!.vendingMachineId,
+            vendingMachineId: session.vendingMachineId,
             payload: { productId: inventoryDoc.id, quantity: newQuantity },
             timestamp: now,
             processed: false,

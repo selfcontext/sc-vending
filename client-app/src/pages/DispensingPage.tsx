@@ -8,10 +8,22 @@ import { Session } from '@/types';
 import Lottie from 'lottie-react';
 import dispensingAnimation from '@/assets/animations/dispensing.json';
 
+const DISPENSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes timeout
+
 export default function DispensingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Timeout effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setTimedOut(true);
+    }, DISPENSE_TIMEOUT_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -46,10 +58,46 @@ export default function DispensingPage() {
     return () => unsubscribe();
   }, [sessionId, navigate]);
 
+  // Handle timeout - show error with option to proceed
+  const handleProceedAnyway = () => {
+    navigate(`/success/${sessionId}`);
+  };
+
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader className="w-12 h-12 animate-spin text-white" />
+      </div>
+    );
+  }
+
+  // Timeout state - show error with proceed option
+  if (timedOut) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-strong rounded-3xl max-w-lg w-full p-8 text-center"
+        >
+          <AlertCircle className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Dispensing Taking Longer Than Expected</h2>
+          <p className="text-gray-600 mb-6">
+            The dispensing process is taking longer than usual. This may be due to a machine issue.
+            Please check if your items have been dispensed.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={handleProceedAnyway}
+              className="w-full px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+            >
+              View Order Summary
+            </button>
+            <p className="text-sm text-gray-500">
+              Any unprocessed items will be refunded automatically.
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -99,9 +147,10 @@ export default function DispensingPage() {
           {/* Item Status List */}
           <div className="space-y-3 mb-8">
             {session.basket.map((item) => {
-              const itemDispenseStatuses = session.dispensedItems.filter(
-                (di) => di.productId === item.productId
-              );
+              // Filter and sort by timestamp to ensure correct ordering regardless of processing order
+              const itemDispenseStatuses = session.dispensedItems
+                .filter((di) => di.productId === item.productId)
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
               return (
                 <div key={item.productId}>

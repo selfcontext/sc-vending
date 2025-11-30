@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Package, X, Plus, Minus, ArrowRight } from 'lucide-react';
@@ -9,9 +9,7 @@ import { Product, Session, BasketItem } from '@/types';
 import SessionTimer from '@/components/SessionTimer';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import toast from 'react-hot-toast';
-import Lottie from 'lottie-react';
-import shoppingAnimation from '@/assets/animations/shopping.json';
-import { staggerContainer, staggerItem, fadeInUp, slideInRight, scaleIn, pageTransition } from '@/lib/animations';
+import { staggerContainer, staggerItem, fadeInUp, slideInRight, pageTransition } from '@/lib/animations';
 
 export default function ShoppingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -21,6 +19,7 @@ export default function ShoppingPage() {
   const [loading, setLoading] = useState(true);
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -40,8 +39,9 @@ export default function ShoppingPage() {
             completedAt: data.completedAt?.toDate(),
           } as Session);
 
-          // Check if session has been paid
-          if (data.status === 'completed' || data.payments?.some((p: any) => p.status === 'completed')) {
+          // Check if session has been paid (with navigation guard to prevent multiple triggers)
+          if ((data.status === 'completed' || data.payments?.some((p: { status: string }) => p.status === 'completed')) && !hasNavigatedRef.current) {
+            hasNavigatedRef.current = true;
             navigate(`/dispensing/${sessionId}`);
           }
         } else {
@@ -88,6 +88,18 @@ export default function ShoppingPage() {
   const addToBasket = async (product: Product, quantity: number = 1) => {
     if (!sessionId || !session) return;
 
+    // VALIDATION: Check if session is expired before allowing add to basket
+    if (session.expiresAt && new Date() > session.expiresAt) {
+      toast.error('Session has expired. Please start a new session.');
+      return;
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      toast.error('Session is no longer active.');
+      return;
+    }
+
     try {
       const existingItem = session.basket.find((item) => item.productId === product.id);
       let newBasket: BasketItem[];
@@ -129,6 +141,18 @@ export default function ShoppingPage() {
   const updateQuantity = async (productId: string, delta: number) => {
     if (!sessionId || !session) return;
 
+    // VALIDATION: Check if session is expired
+    if (session.expiresAt && new Date() > session.expiresAt) {
+      toast.error('Session has expired. Please start a new session.');
+      return;
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      toast.error('Session is no longer active.');
+      return;
+    }
+
     try {
       const newBasket = session.basket
         .map((item) =>
@@ -156,7 +180,7 @@ export default function ShoppingPage() {
     try {
       const functions = getFunctions();
       const extendSession = httpsCallable(functions, 'extendSession');
-      const result = await extendSession({ sessionId });
+      await extendSession({ sessionId });
 
       toast.success('Session extended successfully!');
     } catch (error: any) {
@@ -206,7 +230,6 @@ export default function ShoppingPage() {
       {session && session.status === 'active' && (
         <SessionTimer
           expiresAt={session.expiresAt}
-          sessionId={sessionId!}
           extendedCount={session.extendedCount || 0}
           onExtend={handleExtendSession}
         />
@@ -267,7 +290,7 @@ export default function ShoppingPage() {
             animate="animate"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {products.map((product, index) => (
+            {products.map((product) => (
               <motion.div
                 key={product.id}
                 variants={staggerItem}
@@ -427,7 +450,7 @@ export default function ShoppingPage() {
                     animate="animate"
                     className="space-y-4"
                   >
-                    {session.basket.map((item, index) => (
+                    {session.basket.map((item) => (
                       <motion.div
                         key={item.productId}
                         variants={staggerItem}

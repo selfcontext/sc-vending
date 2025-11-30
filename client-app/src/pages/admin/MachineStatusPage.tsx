@@ -5,9 +5,6 @@ import {
   collection,
   query,
   onSnapshot,
-  orderBy,
-  where,
-  Timestamp,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
@@ -93,7 +90,7 @@ export default function MachineStatusPage() {
       const functions = getFunctions();
       const manualDispenseTest = httpsCallable(functions, 'manualDispenseTest');
 
-      const result = await manualDispenseTest({
+      await manualDispenseTest({
         vendingMachineId: selectedMachine.id,
         productId: testProductId,
         slot: parseInt(testSlot),

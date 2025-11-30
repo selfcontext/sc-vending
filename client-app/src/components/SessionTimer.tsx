@@ -4,12 +4,11 @@ import { Clock, AlertCircle } from 'lucide-react';
 
 interface SessionTimerProps {
   expiresAt: Date;
-  sessionId: string;
   extendedCount: number;
   onExtend: () => void;
 }
 
-export default function SessionTimer({ expiresAt, sessionId, extendedCount, onExtend }: SessionTimerProps) {
+export default function SessionTimer({ expiresAt, extendedCount, onExtend }: SessionTimerProps) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [showWarning, setShowWarning] = useState(false);
   const [totalDuration, setTotalDuration] = useState(0);
@@ -18,7 +17,7 @@ export default function SessionTimer({ expiresAt, sessionId, extendedCount, onEx
     // Calculate initial total duration
     const now = Date.now();
     const expires = expiresAt.getTime();
-    setTotalDuration(expires - (now - (expires - now)));
+    setTotalDuration(expires - now);
 
     const interval = setInterval(() => {
       const now = Date.now();

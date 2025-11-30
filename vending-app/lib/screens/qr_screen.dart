@@ -16,6 +16,7 @@ class QrScreen extends StatefulWidget {
 class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin {
   VendingSession? _session;
   bool _loading = true;
+  bool _hasNavigated = false;
   late AnimationController _pulseController;
   StreamSubscription<VendingSession?>? _sessionSubscription;
   Timer? _countdownTimer;
@@ -51,23 +52,49 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
   }
 
   Future<void> _createSession() async {
+    // Cancel any existing subscription before creating new session
+    _sessionSubscription?.cancel();
+    _sessionSubscription = null;
+
+    // Reset navigation guard for new session
+    _hasNavigated = false;
+
+    // Clear any existing session in the service
+    FirebaseService.clearCurrentSession();
+
     setState(() => _loading = true);
 
-    final session = await FirebaseService.createSession();
+    try {
+      final session = await FirebaseService.createSession();
 
-    if (session != null && mounted) {
-      setState(() {
-        _session = session;
-        _loading = false;
-      });
+      if (session != null && mounted) {
+        setState(() {
+          _session = session;
+          _loading = false;
+        });
 
-      // Start listening to session changes
-      _listenToSession(session.id);
-    } else {
+        // Start listening to session changes
+        _listenToSession(session.id);
+      } else {
+        setState(() => _loading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create session')),
+          );
+        }
+      }
+    } on FirebaseServiceException catch (e) {
       setState(() => _loading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create session')),
+          SnackBar(content: Text('Error: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unexpected error: $e')),
         );
       }
     }
@@ -81,8 +108,9 @@ class _QrScreenState extends State<QrScreen> with SingleTickerProviderStateMixin
 
         setState(() => _session = session);
 
-        // Navigate to basket screen when there's activity
-        if (session.basket.isNotEmpty && session.status == 'active') {
+        // Navigate to basket screen when there's activity (with guard to prevent multiple triggers)
+        if (session.basket.isNotEmpty && session.status == 'active' && !_hasNavigated) {
+          _hasNavigated = true;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => BasketScreen(sessionId: sessionId),

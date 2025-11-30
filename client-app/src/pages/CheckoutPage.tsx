@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CreditCard, Loader, ArrowLeft, CheckCircle } from 'lucide-react';
 import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '@/lib/firebase';
 import { Session } from '@/types';
 import { PaymentService } from '@/services/payment.service';
@@ -13,6 +14,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [processing, setProcessing] = useState(false);
+  const hasNavigatedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -29,8 +31,9 @@ export default function CheckoutPage() {
           completedAt: data.completedAt?.toDate(),
         } as Session);
 
-        // Check if payment completed
-        if (data.payments?.some((p: any) => p.status === 'completed')) {
+        // Check if payment completed (with navigation guard to prevent multiple triggers)
+        if (data.payments?.some((p: { status: string }) => p.status === 'completed') && !hasNavigatedRef.current) {
+          hasNavigatedRef.current = true;
           navigate(`/dispensing/${sessionId}`);
         }
       }
@@ -41,6 +44,24 @@ export default function CheckoutPage() {
 
   const handlePayment = async () => {
     if (!session || !sessionId) return;
+
+    // VALIDATION: Check if session is expired before allowing payment
+    if (session.expiresAt && new Date() > session.expiresAt) {
+      toast.error('Session has expired. Please start a new session.');
+      return;
+    }
+
+    // VALIDATION: Check if session is still active
+    if (session.status !== 'active') {
+      toast.error('Session is no longer active.');
+      return;
+    }
+
+    // VALIDATION: Check if basket is empty
+    if (!session.basket || session.basket.length === 0) {
+      toast.error('Your basket is empty.');
+      return;
+    }
 
     setProcessing(true);
     try {
@@ -56,22 +77,52 @@ export default function CheckoutPage() {
       });
 
       if (result.success) {
-        // Update session with payment info
+        const transactionId = result.transactionId || `pay_${Date.now()}`;
+
+        // Call Cloud Function FIRST to validate and create events atomically
+        // The Cloud Function handles session status update + event creation in a batch
+        // This prevents the double-write race condition
+        try {
+          const functions = getFunctions();
+          const processPaymentFn = httpsCallable(functions, 'processPayment');
+          await processPaymentFn({
+            sessionId,
+            transactionId,
+            amount: session.totalAmount,
+          });
+        } catch (fnError: unknown) {
+          console.error('Cloud Function error:', fnError);
+          const errorMessage = fnError instanceof Error ? fnError.message : 'Payment processing failed';
+          // Check for specific error types
+          if (errorMessage.includes('already processed')) {
+            toast.error('Payment was already processed for this session.');
+          } else if (errorMessage.includes('not active')) {
+            toast.error('Session is no longer active.');
+          } else if (errorMessage.includes('Insufficient stock')) {
+            toast.error('Some items are out of stock. Please update your basket.');
+          } else {
+            toast.error('Payment processing failed. Please try again.');
+          }
+          return;
+        }
+
+        // Update local session with payment info (for UI display)
+        // Note: Cloud Function already updated the session status
         const payment = {
-          id: result.transactionId || `pay_${Date.now()}`,
+          id: transactionId,
           amount: session.totalAmount,
           status: 'completed' as const,
           method: 'mock_payment',
           timestamp: new Date(),
-          transactionId: result.transactionId,
+          transactionId,
         };
 
         await updateDoc(doc(db, 'sessions', sessionId), {
           payments: arrayUnion(payment),
-          status: 'completed',
         });
 
         toast.success('Payment successful!');
+        hasNavigatedRef.current = true;
         navigate(`/dispensing/${sessionId}`);
       } else {
         toast.error(result.error || 'Payment failed');

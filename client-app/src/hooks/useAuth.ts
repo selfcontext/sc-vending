@@ -17,16 +17,17 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
+        setLoading(false);
       } else {
         // Auto sign-in anonymously
+        // Note: successful sign-in will trigger onAuthStateChanged again with the new user
         try {
-          const result = await signInAnonymously(auth);
-          setUser(result.user);
+          await signInAnonymously(auth);
         } catch (error) {
           console.error('Auto sign-in failed:', error);
+          setLoading(false);
         }
       }
-      setLoading(false);
     });
 
     return unsubscribe;

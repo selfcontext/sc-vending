@@ -5,16 +5,12 @@ import {
   DollarSign,
   ShoppingBag,
   Package,
-  Calendar,
 } from 'lucide-react';
 import {
   LineChart,
   Line,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -34,8 +30,6 @@ import {
 import { db } from '@/lib/firebase';
 import { Session, TransactionLog } from '@/types';
 import AdminLayout from '@/components/AdminLayout';
-
-const COLORS = ['#9333ea', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -377,7 +371,7 @@ export default function AnalyticsPage() {
           )}
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }
 
